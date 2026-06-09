@@ -4,9 +4,11 @@ import os
 
 st.title("Micro CT pipe line")
 
-# Initialize session state for master sheet verification
+# Initialize session state for master sheet verification and data directory count
 if "master_sheet_verified" not in st.session_state:
     st.session_state.master_sheet_verified = False
+if "data_dir_count" not in st.session_state:
+    st.session_state.data_dir_count = None
 
 # Master sheet existence check (moved to top)
 st.subheader("Master Sheet Checker")
@@ -28,6 +30,33 @@ with col2:
         else:
             st.session_state.master_sheet_verified = False
             st.warning("Please enter a file path")
+
+# Data directory count checker
+st.subheader("Data Directory Checker")
+col1, col2 = st.columns([4, 1])
+
+with col1:
+    data_dir_path = st.text_input("Data directory path:", placeholder="Enter the path to your data directory")
+
+with col2:
+    st.write("")
+    if st.button("Count files"):
+        if data_dir_path:
+            if os.path.isdir(data_dir_path):
+                file_count = sum(
+                    1 for entry in os.scandir(data_dir_path) if entry.is_file()
+                )
+                st.session_state.data_dir_count = file_count
+                st.success(f"✓ {file_count} files found in data directory")
+            else:
+                st.session_state.data_dir_count = None
+                st.error(f"✗ Data directory not found")
+        else:
+            st.session_state.data_dir_count = None
+            st.warning("Please enter a directory path")
+
+if st.session_state.data_dir_count is not None:
+    st.info(f"Number of files: {st.session_state.data_dir_count}")
 
 st.divider()
 
