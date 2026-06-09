@@ -1,5 +1,5 @@
 {
     "master_sheet_path": "D:\\Faramarz\\microCT_pipeline\\microCT_pipeline\\mastersheet.csv",
-    "data_directory_path": "D:\\Faramarz\\microCT_pipeline\\microCT_pipeline\\1-denoising",
-    "file_count": 2
+    "data_directory_path": "D:\\Faramarz\\microCT_pipeline\\microCT_pipeline\\2-segmentation",
+    "file_count": 1
 }

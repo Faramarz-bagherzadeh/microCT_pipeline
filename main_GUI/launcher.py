@@ -5,6 +5,10 @@ import json
 
 st.title("Micro CT pipe line")
 
+# Get the directory where this script is located
+script_dir = os.path.dirname(os.path.abspath(__file__))
+config_file_path = os.path.join(script_dir, "config.json")
+
 # Initialize session state for master sheet verification and data directory count
 if "master_sheet_verified" not in st.session_state:
     st.session_state.master_sheet_verified = False
@@ -55,12 +59,16 @@ if st.button("Verify Paths", use_container_width=True):
             "data_directory_path": st.session_state.data_dir_abs_path,
             "file_count": st.session_state.data_dir_count
         }
-        with open("config.json", "w") as f:
-            json.dump(config_data, f, indent=4)
-        
-        st.success(f"✓ Paths verified and saved to config.json")
-        st.info(f"Master sheet: {st.session_state.master_sheet_abs_path}")
-        st.info(f"Data directory: {st.session_state.data_dir_abs_path} ({file_count} files)")
+        try:
+            with open(config_file_path, "w") as f:
+                json.dump(config_data, f, indent=4)
+            st.success(f"✓ Paths verified and saved to config.json")
+            st.info(f"Master sheet: {st.session_state.master_sheet_abs_path}")
+            st.info(f"Data directory: {st.session_state.data_dir_abs_path} ({file_count} files)")
+        except PermissionError:
+            st.error(f"✗ Permission denied: Cannot write to {config_file_path}")
+        except IOError as e:
+            st.error(f"✗ Error writing config file: {e}")
 
 st.divider()
 
