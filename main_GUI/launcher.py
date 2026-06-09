@@ -1,6 +1,7 @@
 import streamlit as st
-import paramiko
 import os
+import subprocess
+import json
 
 st.title("Micro CT pipe line")
 
@@ -9,62 +10,65 @@ if "master_sheet_verified" not in st.session_state:
     st.session_state.master_sheet_verified = False
 if "data_dir_count" not in st.session_state:
     st.session_state.data_dir_count = None
+if "master_sheet_abs_path" not in st.session_state:
+    st.session_state.master_sheet_abs_path = None
+if "data_dir_abs_path" not in st.session_state:
+    st.session_state.data_dir_abs_path = None
 
-# Master sheet existence check (moved to top)
-st.subheader("Master Sheet Checker")
-col1, col2 = st.columns([4, 1])
+# Path verification section
+st.subheader("Path Configuration")
+col1, col2 = st.columns(2)
 
 with col1:
     master_sheet_path = st.text_input("Master sheet file path:", placeholder="Enter the path to your master sheet file")
 
 with col2:
-    st.write("")  # Add spacing
-    if st.button("Check"):
-        if master_sheet_path:
-            if os.path.exists(master_sheet_path):
-                st.session_state.master_sheet_verified = True
-                st.success(f"✓ Master sheet exists")
-            else:
-                st.session_state.master_sheet_verified = False
-                st.error(f"✗ Master sheet not found")
-        else:
-            st.session_state.master_sheet_verified = False
-            st.warning("Please enter a file path")
-
-# Data directory count checker
-st.subheader("Data Directory Checker")
-col1, col2 = st.columns([4, 1])
-
-with col1:
     data_dir_path = st.text_input("Data directory path:", placeholder="Enter the path to your data directory")
 
-with col2:
-    st.write("")
-    if st.button("Count files"):
-        if data_dir_path:
-            if os.path.isdir(data_dir_path):
-                file_count = sum(
-                    1 for entry in os.scandir(data_dir_path) if entry.is_file()
-                )
-                st.session_state.data_dir_count = file_count
-                st.success(f"✓ {file_count} files found in data directory")
-            else:
-                st.session_state.data_dir_count = None
-                st.error(f"✗ Data directory not found")
-        else:
-            st.session_state.data_dir_count = None
-            st.warning("Please enter a directory path")
-
-if st.session_state.data_dir_count is not None:
-    st.info(f"Number of files: {st.session_state.data_dir_count}")
+# Single verify button
+if st.button("Verify Paths", use_container_width=True):
+    if not master_sheet_path or not data_dir_path:
+        st.error("✗ Please enter both paths")
+        st.session_state.master_sheet_verified = False
+        st.session_state.data_dir_count = None
+    elif not os.path.exists(master_sheet_path):
+        st.error("✗ Master sheet file not found")
+        st.session_state.master_sheet_verified = False
+        st.session_state.data_dir_count = None
+    elif not os.path.isdir(data_dir_path):
+        st.error("✗ Data directory not found")
+        st.session_state.master_sheet_verified = False
+        st.session_state.data_dir_count = None
+    else:
+        # Both paths exist - count files and save
+        file_count = sum(
+            1 for entry in os.scandir(data_dir_path) if entry.is_file()
+        )
+        st.session_state.master_sheet_verified = True
+        st.session_state.data_dir_count = file_count
+        st.session_state.master_sheet_abs_path = os.path.abspath(master_sheet_path)
+        st.session_state.data_dir_abs_path = os.path.abspath(data_dir_path)
+        
+        # Save to JSON
+        config_data = {
+            "master_sheet_path": st.session_state.master_sheet_abs_path,
+            "data_directory_path": st.session_state.data_dir_abs_path,
+            "file_count": st.session_state.data_dir_count
+        }
+        with open("config.json", "w") as f:
+            json.dump(config_data, f, indent=4)
+        
+        st.success(f"✓ Paths verified and saved to config.json")
+        st.info(f"Master sheet: {st.session_state.master_sheet_abs_path}")
+        st.info(f"Data directory: {st.session_state.data_dir_abs_path} ({file_count} files)")
 
 st.divider()
 
 # Job submission section
 st.subheader("SLURM Job Submission")
 
-if not st.session_state.master_sheet_verified:
-    st.warning("⚠️ Please verify the master sheet first to launch jobs")
+if not st.session_state.master_sheet_verified or st.session_state.data_dir_count is None:
+    st.warning("⚠️ Please verify both paths first to launch jobs")
 
 job = st.selectbox("Select pipeline stage", [
     "1-Denoising",
@@ -75,25 +79,17 @@ job = st.selectbox("Select pipeline stage", [
     "6-Merging data",
 ])
 
-submit_button = st.button("Submit SLURM job", disabled=not st.session_state.master_sheet_verified)
+submit_button = st.button("Submit SLURM job", disabled=not (st.session_state.master_sheet_verified and st.session_state.data_dir_count is not None))
 
 if submit_button:
     slurm_script = f"slurm/{job}.slurm"
 
-    ssh = paramiko.SSHClient()
-    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-
-    ssh.connect(
-        hostname="YOUR_HPC_ADDRESS",
-        username="YOUR_USERNAME",
-        key_filename="~/.ssh/id_ed25519"
-    )
-
-    cmd = f"sbatch {slurm_script}"
-    stdin, stdout, stderr = ssh.exec_command(cmd)
-
-    output = stdout.read().decode()
-    error = stderr.read().decode()
-
-    st.text(output)
-    st.text(error)
+    cmd = ["sbatch", slurm_script]
+    try:
+        completed = subprocess.run(cmd, capture_output=True, text=True, check=False)
+        st.text(completed.stdout)
+        st.text(completed.stderr)
+        if completed.returncode != 0:
+            st.error(f"sbatch exited with return code {completed.returncode}")
+    except Exception as exc:
+        st.error(f"Failed to submit SLURM job: {exc}")
