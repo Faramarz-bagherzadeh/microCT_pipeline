@@ -2,6 +2,7 @@ import streamlit as st
 import os
 import subprocess
 import json
+from stages import denoising, segmentation, weight_checking, sampling, feature_extraction, merging_data
 
 st.title("Micro CT pipe line")
 
@@ -18,33 +19,59 @@ if "master_sheet_abs_path" not in st.session_state:
     st.session_state.master_sheet_abs_path = None
 if "data_dir_abs_path" not in st.session_state:
     st.session_state.data_dir_abs_path = None
+if "stage_selection_enabled" not in st.session_state:
+    st.session_state.stage_selection_enabled = False
+if "active_stage" not in st.session_state:
+    st.session_state.active_stage = None
+if "selected_stage" not in st.session_state:
+    st.session_state.selected_stage = "1-Denoising"
 
-# Path verification section
+
+def save_config():
+    config_data = {
+        "master_sheet_path": st.session_state.master_sheet_abs_path,
+        "data_directory_path": st.session_state.data_dir_abs_path,
+        "file_count": st.session_state.data_dir_count
+    }
+    try:
+        with open(config_file_path, "w") as f:
+            json.dump(config_data, f, indent=4)
+        return True
+    except PermissionError:
+        st.error(f"✗ Permission denied: Cannot write to {config_file_path}")
+    except IOError as e:
+        st.error(f"✗ Error writing config file: {e}")
+    return False
+
+
 st.subheader("Path Configuration")
 col1, col2 = st.columns(2)
 
 with col1:
     master_sheet_path = st.text_input("Master sheet file path:", placeholder="Enter the path to your master sheet file")
-
 with col2:
     data_dir_path = st.text_input("Data directory path:", placeholder="Enter the path to your data directory")
 
-# Single verify button
 if st.button("Verify Paths", use_container_width=True):
     if not master_sheet_path or not data_dir_path:
         st.error("✗ Please enter both paths")
         st.session_state.master_sheet_verified = False
         st.session_state.data_dir_count = None
+        st.session_state.stage_selection_enabled = False
+        st.session_state.active_stage = None
     elif not os.path.exists(master_sheet_path):
         st.error("✗ Master sheet file not found")
         st.session_state.master_sheet_verified = False
         st.session_state.data_dir_count = None
+        st.session_state.stage_selection_enabled = False
+        st.session_state.active_stage = None
     elif not os.path.isdir(data_dir_path):
         st.error("✗ Data directory not found")
         st.session_state.master_sheet_verified = False
         st.session_state.data_dir_count = None
+        st.session_state.stage_selection_enabled = False
+        st.session_state.active_stage = None
     else:
-        # Both paths exist - count files and save
         file_count = sum(
             1 for entry in os.scandir(data_dir_path) if entry.is_file()
         )
@@ -52,52 +79,58 @@ if st.button("Verify Paths", use_container_width=True):
         st.session_state.data_dir_count = file_count
         st.session_state.master_sheet_abs_path = os.path.abspath(master_sheet_path)
         st.session_state.data_dir_abs_path = os.path.abspath(data_dir_path)
-        
-        # Save to JSON
-        config_data = {
-            "master_sheet_path": st.session_state.master_sheet_abs_path,
-            "data_directory_path": st.session_state.data_dir_abs_path,
-            "file_count": st.session_state.data_dir_count
-        }
-        try:
-            with open(config_file_path, "w") as f:
-                json.dump(config_data, f, indent=4)
-            st.success(f"✓ Paths verified and saved to config.json")
+        st.session_state.stage_selection_enabled = True
+        st.session_state.active_stage = None
+
+        if save_config():
+            st.success("✓ Paths verified and saved to config.json")
             st.info(f"Master sheet: {st.session_state.master_sheet_abs_path}")
             st.info(f"Data directory: {st.session_state.data_dir_abs_path} ({file_count} files)")
-        except PermissionError:
-            st.error(f"✗ Permission denied: Cannot write to {config_file_path}")
-        except IOError as e:
-            st.error(f"✗ Error writing config file: {e}")
 
-st.divider()
+if st.session_state.master_sheet_verified:
+    st.success("✓ Paths already verified")
+    st.info(f"Master sheet: {st.session_state.master_sheet_abs_path}")
+    st.info(f"Data directory: {st.session_state.data_dir_abs_path} ({st.session_state.data_dir_count} files)")
 
-# Job submission section
-st.subheader("SLURM Job Submission")
+STAGE_MODULES = {
+    "1-Denoising": denoising,
+    "2-Segmentation": segmentation,
+    "3-Weight Checking": weight_checking,
+    "4-Sampling": sampling,
+    "5-Feature Extraction": feature_extraction,
+    "6-Merging data": merging_data,
+}
 
-if not st.session_state.master_sheet_verified or st.session_state.data_dir_count is None:
-    st.warning("⚠️ Please verify both paths first to launch jobs")
+if st.session_state.stage_selection_enabled:
+    st.divider()
+    st.subheader("Stage Selection")
+    st.session_state.selected_stage = st.selectbox("Pipeline stage", list(STAGE_MODULES.keys()), index=list(STAGE_MODULES.keys()).index(st.session_state.selected_stage))
 
-job = st.selectbox("Select pipeline stage", [
-    "1-Denoising",
-    "2-Segmentation",
-    "3-Weight Checking",
-    "4-Sampling",
-    "5-Feature Extraction",
-    "6-Merging data",
-])
+    if st.button("Open stage", use_container_width=True):
+        st.session_state.active_stage = st.session_state.selected_stage
 
-submit_button = st.button("Submit SLURM job", disabled=not (st.session_state.master_sheet_verified and st.session_state.data_dir_count is not None))
+if st.session_state.active_stage:
+    st.divider()
+    stage = st.session_state.active_stage
+    stage_module = STAGE_MODULES.get(stage)
+    if stage_module is not None:
+        config = {
+            "master_sheet_path": st.session_state.master_sheet_abs_path,
+            "data_directory_path": st.session_state.data_dir_abs_path,
+            "file_count": st.session_state.data_dir_count,
+        }
+        stage_module.render(config)
+    else:
+        st.error(f"Unknown stage: {stage}")
 
-if submit_button:
-    slurm_script = f"slurm/{job}.slurm"
+    st.markdown("---")
+    if st.button("Back to stage selection"):
+        st.session_state.active_stage = None
+    if st.button("Reset verification"):
+        st.session_state.master_sheet_verified = False
+        st.session_state.data_dir_count = None
+        st.session_state.master_sheet_abs_path = None
+        st.session_state.data_dir_abs_path = None
+        st.session_state.stage_selection_enabled = False
+        st.session_state.active_stage = None
 
-    cmd = ["sbatch", slurm_script]
-    try:
-        completed = subprocess.run(cmd, capture_output=True, text=True, check=False)
-        st.text(completed.stdout)
-        st.text(completed.stderr)
-        if completed.returncode != 0:
-            st.error(f"sbatch exited with return code {completed.returncode}")
-    except Exception as exc:
-        st.error(f"Failed to submit SLURM job: {exc}")
