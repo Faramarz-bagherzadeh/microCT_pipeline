@@ -80,12 +80,12 @@ def unpatchify_volume_center_croped(patches,
     Taking the processed patches and reconstructing the original volume
     """
     cp = patches.shape[-1] # new length of each patch after ML model
-    op = original_patch_shape[0] # original patching dimenssions   
-    o = original_vol_shape[0] # original image dimenssions
+    op = original_patch_shape # original patching dimenssions   
+    o = original_vol_shape # original image dimenssions
     #back to original patched spacing but with smaller croped patch size
-    patches = patches.reshape(op,op,op,cp,cp,cp)
+    patches = patches.reshape(op[0],op[1],op[2],cp,cp,cp)
     #back to original volume size
-    volume = unpatchify(patches,(o-cp,o-cp,o-cp))
+    volume = unpatchify(patches,(o[0]-cp,o[1]-cp,o[2]-cp))
     return volume
 
 
