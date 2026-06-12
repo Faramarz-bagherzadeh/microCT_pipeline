@@ -95,13 +95,13 @@ def load_checkpoint(checkpoint, model):
     model.load_state_dict(checkpoint["state_dict"])
 
 
-def predict(model,data, batch_size=32):
-    prediction = np.zeros_like(data)
+def predict(model,data,patch_size, batch_size=128):
+    prediction = np.zeros((data.shape[0],patch_size//2,patch_size//2,patch_size//2), dtype='uint8')
     torch.set_num_threads(120)
     #drop zero patches to save time
     non_zero_indices = np.where(np.sum(data, axis=(1,2,3)) != 0)[0]
 
-    loop_len = data[non_zero_indices].shape[0]//batch_size
+    loop_len = len (non_zero_indices)//batch_size
     for i in range(0,loop_len+1):
         
         if i+1 > loop_len:
@@ -252,7 +252,7 @@ if __name__ == "__main__":
     patch_size = 64
     data, pad_front = reshape_to_10240_1024_1024(data)
     patches ,original_patch_shape ,original_vol_shape = patching_volume_with_half_overlap(data, patch_size=patch_size)
-    output = predict(model,patches, batch_size=32)
+    output = predict(model,patches,patch_size=patch_size, batch_size=32)
     output = unpatchify_volume_center_croped(output, original_patch_shape, original_vol_shape)
     output = output.astype('uint8')
     output = output[pad_front:pad_front+data.shape[0],:,:] # remove the padding part if there is any
