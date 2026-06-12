@@ -1,7 +1,7 @@
 #!/bin/bash -l
 #SBATCH --account=glaz.glaz
 #SBATCH --partition=gpu
-#SBATCH --gpus=a100:1
+#SBATCH --gpus=a100:4
 #SBATCH --nodes=1
 #SBATCH --tasks-per-node 1
 #SBATCH --qos=48h
