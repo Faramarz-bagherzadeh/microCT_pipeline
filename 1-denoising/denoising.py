@@ -260,13 +260,18 @@ if __name__ == "__main__":
     output = unpatchify_volume_center_croped(output, original_patch_shape, original_vol_shape)
     output = output.astype('uint8')
     print ('unpatching done! ', output.shape)
-    output = output[pad_front:pad_front+data.shape[0],:,:] # remove the padding part if there is any
+    output = output[pad_front: -pad_front,:,:] # remove the padding part if there is any
+    output [output > 240] = 0 # remove very bright pixels which are not real and are artifacts
+
     metadata = {
         'axes': 'ZYX',  # Adjust according to your image axes, could be 'XY', 'XYZ', 'ZYX', etc.
         'spacing': 1.0,  # Pixel size along Z-axis (modify as needed)
         'unit': 'um',    # Units, e.g., 'micrometer' or 'nm'
         'description': '3D image data with proper metadata for ImageJ'}
+    
+    print ('final output shape = ', output.shape)
     print ('saving image...')
+
     tifffile.imwrite(output_dir + name + '_.tif', output,photometric='minisblack',metadata=metadata,imagej=True)
         
     
