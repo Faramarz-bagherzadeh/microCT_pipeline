@@ -1,126 +1,200 @@
 import os
+import os
+import re
+import time
 import subprocess
 import streamlit as st
-import pandas as pd
 import json
+from pathlib import Path
 
 STAGE_NAME = "1-Denoising"
 
-EXPECTED_COLUMNS = ["file_name", "start_depth", "end_depth"]
 
-
-def load_master_sheet(path):
-    try:
-        if path.lower().endswith(".csv"):
-            return pd.read_csv(path)
-        else:
-            return pd.read_excel(path)
-    except Exception as e:
-        st.error(f"Failed to read master sheet: {e}")
-        return None
-
-
-def save_stage_config(config, denoising_output_dir):
+def save_stage_config(config):
     config_file_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "config.json"))
-    config_copy = config.copy()
-    config_copy["denoising_output_dir"] = denoising_output_dir
     try:
         with open(config_file_path, "w") as f:
-            json.dump(config_copy, f, indent=4)
+            json.dump(config, f, indent=4)
         return True
     except Exception as e:
         st.error(f"Failed to update config file: {e}")
         return False
 
 
+def get_dirs(path):
+    try:
+        base = Path(path)
+        if not base.is_dir():
+            return []
+
+        def is_hidden_dir(path_obj):
+            return any(part.startswith(".") for part in path_obj.relative_to(base).parts)
+
+        return [p for p in base.rglob("*") if p.is_dir() and not is_hidden_dir(p)]
+    except Exception:
+        return []
+
+
+def _write_slurm_for(template_path, target_path, input_value, output_value):
+    with open(template_path, "r", encoding="utf-8") as f:
+        text = f.read()
+
+    # Replace INPUT_DIR= and OUTPUT_DIR= lines (handles quotes or not)
+    text = re.sub(r'INPUT_DIR\s*=.*', f'INPUT_DIR="{input_value}"', text)
+    text = re.sub(r'OUTPUT_DIR\s*=.*', f'OUTPUT_DIR="{output_value}"', text)
+
+    with open(target_path, "w", encoding="utf-8") as f:
+        f.write(text)
+
+
+def _submit_and_wait(slurm_file, stop_flag_key="denoise_stop", poll_interval=5):
+    try:
+        completed = subprocess.run(["sbatch", slurm_file], capture_output=True, text=True)
+    except Exception as e:
+        st.error(f"Failed to run sbatch: {e}")
+        return None, False
+
+    out = completed.stdout + completed.stderr
+    m = re.search(r"Submitted batch job (\d+)", out)
+    if not m:
+        st.error(f"Could not determine job id from sbatch output:\n{out}")
+        return None, False
+    jobid = m.group(1)
+
+    # Poll until job disappears from squeue or stop requested
+    while True:
+        if st.session_state.get(stop_flag_key):
+            # try to cancel
+            try:
+                subprocess.run(["scancel", jobid], capture_output=True, text=True)
+            except Exception:
+                pass
+            return jobid, False
+
+        try:
+            q = subprocess.run(["squeue", "-j", jobid], capture_output=True, text=True)
+            if q.returncode != 0 or (jobid not in q.stdout):
+                # not in queue
+                return jobid, True
+        except Exception:
+            # cannot query squeue; assume finished
+            return jobid, True
+
+        time.sleep(poll_interval)
+
+
 def render(config):
     st.subheader(STAGE_NAME)
-    st.write("Use this page to design the denoising stage inputs and parameters.")
-    st.write(f"Master sheet: {config['master_sheet_path']}")
-    st.write(f"Data directory: {config['data_directory_path']}")
-    st.write(f"File count: {config['file_count']}")
+    st.write("Use this page to select raw input and denoising output directories.")
 
-    df = load_master_sheet(config["master_sheet_path"])
-    if df is None:
+    base_dir = config.get("dir_picker_base", os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+    base_dir = st.text_input("Folder search base path:", value=base_dir)
+
+    if not base_dir:
+        st.warning("Enter a base path to search for folders.")
         return
 
-    if df.empty:
-        st.warning("Master sheet is empty.")
+    if not os.path.isdir(base_dir):
+        st.error("Base path is not a valid directory.")
         return
 
-    # Normalize columns if possible
-    lower_columns = {col.lower(): col for col in df.columns}
-    if "file_name" not in lower_columns:
-        if "name" in lower_columns:
-            lower_columns["file_name"] = lower_columns["name"]
-        elif "raw_file" in lower_columns:
-            lower_columns["file_name"] = lower_columns["raw_file"]
-
-    if "start_depth" not in lower_columns or "end_depth" not in lower_columns or "file_name" not in lower_columns:
-        st.warning(f"Master sheet should contain columns for file name, start depth, and end depth. Found: {', '.join(df.columns)}")
+    dirs = [Path(base_dir)] + get_dirs(base_dir)
+    dirs = sorted(set(dirs), key=lambda p: str(p))
+    if not dirs:
+        st.warning("No directories found under the selected base path.")
         return
 
-    rows = []
-    for _, row in df.iterrows():
-        rows.append({
-            "file_name": row[lower_columns["file_name"]],
-            "start_depth": row[lower_columns["start_depth"]],
-            "end_depth": row[lower_columns["end_depth"]],
-        })
+    selected_raw = st.selectbox(
+        "Select raw files folder",
+        dirs,
+        format_func=lambda x: str(x.relative_to(base_dir)),
+    )
+    selected_output = st.selectbox(
+        "Select output folder",
+        dirs,
+        index=0,
+        format_func=lambda x: str(x.relative_to(base_dir)),
+    )
 
-    st.markdown("### Raw files to denoise")
-    for idx, row in enumerate(rows):
-        raw_name = str(row["file_name"])
-        processed_key = f"denoise_processed_{idx}_{raw_name}"
-        if processed_key not in st.session_state:
-            st.session_state[processed_key] = False
+    raw_directory_path = str(selected_raw)
+    denoising_output_dir = str(selected_output)
 
-        col1, col2, col3, col4 = st.columns([4, 1, 1, 1])
-        col1.write(raw_name)
-        col2.write(str(row["start_depth"]))
-        col3.write(str(row["end_depth"]))
-        col4.checkbox("Done", value=st.session_state[processed_key], disabled=True, key=processed_key)
+    # gather available .rek files
+    raw_files = []
+    if raw_directory_path and os.path.isdir(raw_directory_path):
+        raw_files = [entry.name for entry in os.scandir(raw_directory_path) if entry.is_file() and entry.name.lower().endswith('.rek')]
 
-    st.markdown("---")
-    output_dir = st.text_input("Denoising output directory:", placeholder="Enter the path to the denoised output directory")
-    output_dir_abs = None
-    if output_dir:
-        output_dir_abs = os.path.abspath(output_dir)
-        st.write(f"Absolute output directory: {output_dir_abs}")
-        if not os.path.isdir(output_dir_abs):
-            st.warning("The output directory does not exist yet. Create it first or enter an existing directory.")
+    # show files with selection and processed columns
+    if raw_files:
+        st.markdown("---")
+        st.write(f"Found {len(raw_files)} .rek files in the selected raw directory.")
+        st.markdown("### Available raw files")
+        for file_name in sorted(raw_files):
+            sel_key = f"rek_selected_{file_name}"
+            done_key = f"rek_done_{file_name}"
+            if sel_key not in st.session_state:
+                st.session_state[sel_key] = False
+            if done_key not in st.session_state:
+                st.session_state[done_key] = False
 
-    slurm_script = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "slurm", "1-Denoising.slurm"))
-    if not os.path.exists(slurm_script):
-        st.error(f"SLURM script not found: {slurm_script}")
+            c1, c2 = st.columns([4, 1])
+            c1.checkbox(file_name, key=sel_key)
+            c2.checkbox("Done", value=st.session_state.get(done_key, False), disabled=True, key=f"disp_{done_key}")
+
+    slurm_template = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "1-denoising", "1_slurm_job_GPU_.slurm"))
+    if not os.path.exists(slurm_template):
+        st.error(f"SLURM template not found: {slurm_template}")
         return
 
-    if st.button("Submit jobs", use_container_width=True):
-        if not output_dir:
-            st.error("✗ Please enter the denoising output directory.")
-            return
-        if not os.path.isdir(output_dir_abs):
-            st.error("✗ Output directory not found. Please use an existing directory.")
-            return
+    if "denoise_running" not in st.session_state:
+        st.session_state.denoise_running = False
+    if "denoise_stop" not in st.session_state:
+        st.session_state.denoise_stop = False
 
-        if save_stage_config(config, output_dir_abs):
-            st.success("✓ Denoising output directory saved to config.json")
+    col_submit, col_stop = st.columns(2)
+    submit_pressed = col_submit.button("Submit jobs", use_container_width=True)
+    stop_pressed = col_stop.button("Stop", use_container_width=True)
 
-        cmd = ["sbatch", slurm_script]
-        try:
-            completed = subprocess.run(cmd, capture_output=True, text=True, check=False)
-            st.text(completed.stdout)
-            st.text(completed.stderr)
-            if completed.returncode == 0:
-                st.success("SLURM job submitted successfully.")
-                for idx, row in enumerate(rows):
-                    raw_name = str(row["file_name"])
-                    processed_key = f"denoise_processed_{idx}_{raw_name}"
-                    st.session_state[processed_key] = True
-            else:
-                st.error(f"sbatch exited with return code {completed.returncode}")
-        except Exception as exc:
-            st.error(f"Failed to submit SLURM job: {exc}")
+    if stop_pressed:
+        st.session_state.denoise_stop = True
 
-    if any(st.session_state.get(f"denoise_processed_{idx}_{str(row['file_name'])}", False) for idx, row in enumerate(rows)):
-        st.info("Some files are marked done in the denoising stage.")
+    if submit_pressed and not st.session_state.denoise_running:
+        # collect selected files
+        to_run = [f for f in raw_files if st.session_state.get(f"rek_selected_{f}")]
+        if not to_run:
+            st.warning("No files selected. Please select files to submit.")
+        else:
+            st.session_state.denoise_running = True
+            st.session_state.denoise_stop = False
+            for idx, fname in enumerate(to_run):
+                if st.session_state.denoise_stop:
+                    st.info("Stopping further submissions.")
+                    break
+
+                input_val = os.path.join(raw_directory_path, fname)
+                output_val = denoising_output_dir
+
+                # write temp slurm file
+                tmp_slurm = slurm_template + f".tmp.{idx}.slurm"
+                try:
+                    _write_slurm_for(slurm_template, tmp_slurm, input_val, output_val)
+                except Exception as e:
+                    st.error(f"Failed to prepare slurm file for {fname}: {e}")
+                    continue
+
+                st.info(f"Submitting {fname}...")
+                jobid, finished_ok = _submit_and_wait(tmp_slurm)
+                if jobid is None:
+                    st.error(f"Submission failed for {fname}.")
+                    continue
+
+                if finished_ok:
+                    st.success(f"Job {jobid} finished for {fname}.")
+                    st.session_state[f"rek_done_{fname}"] = True
+                    # uncheck selection
+                    st.session_state[f"rek_selected_{fname}"] = False
+                else:
+                    st.warning(f"Job {jobid} was cancelled or stopped for {fname}.")
+
+            st.session_state.denoise_running = False
+            st.session_state.denoise_stop = False

@@ -272,7 +272,7 @@ if __name__ == "__main__":
     print ('final output shape = ', output.shape)
     print ('saving image...')
 
-    tifffile.imwrite(output_dir + name + '_.tif', output,photometric='minisblack',metadata=metadata,imagej=True)
+    tifffile.imwrite(output_dir + name + '.tif', output,photometric='minisblack',metadata=metadata,imagej=True)
         
     
     t2= time.time()
