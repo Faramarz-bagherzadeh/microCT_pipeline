@@ -243,6 +243,7 @@ if __name__ == "__main__":
     data = read_rek_file(input_dir)
     print ('original data shape = ', data.shape)
     data = contrast_stretching_full(data)
+    print ('contrast stretching done!')
     mask = get_ice_part(data, 10, 20, 26) #Thickness = 26 is a proper number 
     # use this mask if needed to filter ice parts before SR operation
     data = data *mask
@@ -251,16 +252,21 @@ if __name__ == "__main__":
     
     patch_size = 64
     data, pad_front = reshape_to_10240_1024_1024(data)
+    print ('reshaping done! ', data.shape)
     patches ,original_patch_shape ,original_vol_shape = patching_volume_with_half_overlap(data, patch_size=patch_size)
+    print ('patching done! ', patches.shape)
     output = predict(model,patches,patch_size=patch_size, batch_size=32)
+    print ('prediction done! ', output.shape)
     output = unpatchify_volume_center_croped(output, original_patch_shape, original_vol_shape)
     output = output.astype('uint8')
+    print ('unpatching done! ', output.shape)
     output = output[pad_front:pad_front+data.shape[0],:,:] # remove the padding part if there is any
     metadata = {
         'axes': 'ZYX',  # Adjust according to your image axes, could be 'XY', 'XYZ', 'ZYX', etc.
         'spacing': 1.0,  # Pixel size along Z-axis (modify as needed)
         'unit': 'um',    # Units, e.g., 'micrometer' or 'nm'
         'description': '3D image data with proper metadata for ImageJ'}
+    print ('saving image...')
     tifffile.imwrite(output_dir + name + '_.tif', output,photometric='minisblack',metadata=metadata,imagej=True)
         
     
