@@ -170,6 +170,12 @@ def render(config):
         st.session_state.segmentation_running = False
     if "seg_stop" not in st.session_state:
         st.session_state.seg_stop = False
+    if "seg_queue" not in st.session_state:
+        st.session_state.seg_queue = []
+    if "seg_queue_index" not in st.session_state:
+        st.session_state.seg_queue_index = 0
+    if "seg_phase" not in st.session_state:
+        st.session_state.seg_phase = ""
 
     col_submit, col_stop = st.columns(2)
     submit_pressed = col_submit.button("Submit jobs", use_container_width=True)
@@ -185,40 +191,72 @@ def render(config):
         else:
             st.session_state.segmentation_running = True
             st.session_state.seg_stop = False
-            for idx, fname in enumerate(to_run):
+            st.session_state.seg_queue = to_run
+            st.session_state.seg_queue_index = 0
+            st.session_state.seg_phase = "start_job"
+            st.session_state["seg_deselect_pending"] = []
+            st.rerun()
+
+    if st.session_state.segmentation_running and st.session_state.seg_queue:
+        queue = st.session_state.seg_queue
+        idx = st.session_state.seg_queue_index
+        if idx < len(queue):
+            fname = queue[idx]
+            if st.session_state.seg_phase == "start_job":
+                st.session_state[f"seg_running_{fname}"] = True
+                st.session_state.seg_phase = "run_job"
+                st.rerun()
+            elif st.session_state.seg_phase == "run_job":
                 if st.session_state.seg_stop:
                     st.info("Stopping further submissions.")
-                    break
-
-                input_val = os.path.join(raw_directory_path, fname)
-                output_val = segmentation_output_dir
-
-                tmp_slurm = slurm_template + f".tmp.{idx}.slurm"
-                try:
-                    _write_slurm_for(slurm_template, tmp_slurm, input_val, output_val)
-                except Exception as e:
-                    st.error(f"Failed to prepare slurm file for {fname}: {e}")
-                    continue
-
-                st.session_state[f"seg_running_{fname}"] = True
-                st.info(f"Submitting {fname}...")
-                jobid, finished_ok = _submit_and_wait(tmp_slurm)
-                st.session_state[f"seg_running_{fname}"] = False
-
-                if jobid is None:
-                    st.error(f"Submission failed for {fname}.")
-                    continue
-
-                if finished_ok:
-                    st.success(f"Job {jobid} finished for {fname}.")
-                    st.session_state[f"seg_done_{fname}"] = True
-                    pending_deselect = st.session_state.get("seg_deselect_pending", [])
-                    pending_deselect.append(f"seg_selected_{fname}")
-                    st.session_state["seg_deselect_pending"] = pending_deselect
+                    st.session_state.segmentation_running = False
+                    st.session_state.seg_phase = ""
+                    st.session_state.seg_queue = []
+                    st.session_state.seg_queue_index = 0
                 else:
-                    st.warning(f"Job {jobid} was cancelled or stopped for {fname}.")
+                    input_val = os.path.join(raw_directory_path, fname)
+                    output_val = segmentation_output_dir
 
+                    tmp_slurm = slurm_template + f".tmp.{idx}.slurm"
+                    try:
+                        _write_slurm_for(slurm_template, tmp_slurm, input_val, output_val)
+                    except Exception as e:
+                        st.error(f"Failed to prepare slurm file for {fname}: {e}")
+                        st.session_state[f"seg_running_{fname}"] = False
+                        st.session_state.segmentation_running = False
+                        st.session_state.seg_phase = ""
+                        st.session_state.seg_queue = []
+                        st.session_state.seg_queue_index = 0
+                        st.rerun()
+
+                    st.info(f"Submitting {fname}...")
+                    jobid, finished_ok = _submit_and_wait(tmp_slurm)
+                    st.session_state[f"seg_running_{fname}"] = False
+
+                    if jobid is None:
+                        st.error(f"Submission failed for {fname}.")
+                    elif finished_ok:
+                        st.success(f"Job {jobid} finished for {fname}.")
+                        st.session_state[f"seg_done_{fname}"] = True
+                        pending_deselect = st.session_state.get("seg_deselect_pending", [])
+                        pending_deselect.append(f"seg_selected_{fname}")
+                        st.session_state["seg_deselect_pending"] = pending_deselect
+                    else:
+                        st.warning(f"Job {jobid} was cancelled or stopped for {fname}.")
+
+                    st.session_state.seg_queue_index += 1
+                    if st.session_state.seg_queue_index < len(queue):
+                        st.session_state.seg_phase = "start_job"
+                        st.rerun()
+                    else:
+                        st.session_state.segmentation_running = False
+                        st.session_state.seg_phase = ""
+                        st.session_state.seg_queue = []
+                        st.session_state.seg_queue_index = 0
+                        if st.session_state.get("seg_deselect_pending"):
+                            st.rerun()
+        else:
             st.session_state.segmentation_running = False
-            st.session_state.seg_stop = False
-            if st.session_state.get("seg_deselect_pending"):
-                st.rerun()
+            st.session_state.seg_phase = ""
+            st.session_state.seg_queue = []
+            st.session_state.seg_queue_index = 0
