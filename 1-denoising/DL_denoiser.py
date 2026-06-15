@@ -200,11 +200,13 @@ if __name__ == "__main__":
 
     parser.add_argument("--input_dir", type=str, required=True)
     parser.add_argument("--output_dir", type=str, required=True)
+    parser.add_argument("--model_path", type=str, required=True)
 
     args = parser.parse_args()
 
     input_dir = args.input_dir
     output_dir = args.output_dir
+    model_path = args.model_path
 
     print("Input directory:", input_dir)
     print("Output directory:", output_dir)
@@ -232,7 +234,7 @@ if __name__ == "__main__":
         print(f"Using {torch.cuda.device_count()} GPUs")
         model = nn.DataParallel(model)
         
-    load_checkpoint(torch.load("my_SRResnet_RS8_NC16_checkpoint_NoAugmentation.pth.tar",map_location=torch.device(device) ), model)
+    load_checkpoint(torch.load(model_path, map_location=torch.device(device)), model)
     print ("Model loaded successfully")
     t1= time.time()
 
