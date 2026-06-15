@@ -1,17 +1,224 @@
+import os
+import re
+import time
+import subprocess
 import streamlit as st
+import json
+from pathlib import Path
 
 STAGE_NAME = "2-Segmentation"
 
+
+def get_dirs(path):
+    try:
+        base = Path(path)
+        if not base.is_dir():
+            return []
+
+        def is_hidden_dir(path_obj):
+            return any(part.startswith(".") for part in path_obj.relative_to(base).parts)
+
+        return [p for p in base.rglob("*") if p.is_dir() and not is_hidden_dir(p)]
+    except Exception:
+        return []
+
+
+def _write_slurm_for(template_path, target_path, input_value, output_value):
+    with open(template_path, "r", encoding="utf-8") as f:
+        text = f.read()
+
+    text = re.sub(r'INPUT_DIR\s*=.*', f'INPUT_DIR="{input_value}"', text)
+    text = re.sub(r'OUTPUT_DIR\s*=.*', f'OUTPUT_DIR="{output_value}"', text)
+
+    with open(target_path, "w", encoding="utf-8") as f:
+        f.write(text)
+
+
+def _submit_and_wait(slurm_file, stop_flag_key="seg_stop", poll_interval=5):
+    try:
+        completed = subprocess.run(["sbatch", slurm_file], capture_output=True, text=True)
+    except Exception as e:
+        st.error(f"Failed to run sbatch: {e}")
+        return None, False
+
+    out = completed.stdout + completed.stderr
+    m = re.search(r"Submitted batch job (\d+)", out)
+    if not m:
+        st.error(f"Could not determine job id from sbatch output:\n{out}")
+        return None, False
+    jobid = m.group(1)
+
+    while True:
+        if st.session_state.get(stop_flag_key):
+            try:
+                subprocess.run(["scancel", jobid], capture_output=True, text=True)
+            except Exception:
+                pass
+            return jobid, False
+
+        try:
+            q = subprocess.run(["squeue", "-j", jobid], capture_output=True, text=True)
+            if q.returncode != 0 or (jobid not in q.stdout):
+                return jobid, True
+        except Exception:
+            return jobid, True
+
+        time.sleep(poll_interval)
+
+
 def render(config):
     st.subheader(STAGE_NAME)
-    st.write("Use this page to design the segmentation stage.")
-    st.write(f"Master sheet: {config['master_sheet_path']}")
-    st.write(f"Data directory: {config['data_directory_path']}")
-    st.write(f"File count: {config['file_count']}")
+    st.write("Use this page to select segmentation input and output directories.")
 
-    model_choice = st.selectbox("Segmentation model", ["U-Net", "Mask R-CNN", "Custom"])
-    threshold = st.slider("Confidence threshold", 0.0, 1.0, 0.5)
-    st.write(f"Selected model: {model_choice}, threshold: {threshold}")
+    base_dir = config.get("dir_picker_base", os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+    base_dir = st.text_input("Folder search base path:", value=base_dir)
 
-    if st.button("Save segmentation settings"):
-        st.success("Segmentation settings saved.")
+    if not base_dir:
+        st.warning("Enter a base path to search for folders.")
+        return
+
+    if not os.path.isdir(base_dir):
+        st.error("Base path is not a valid directory.")
+        return
+
+    dirs = [Path(base_dir)] + get_dirs(base_dir)
+    dirs = sorted(set(dirs), key=lambda p: str(p))
+    if not dirs:
+        st.warning("No directories found under the selected base path.")
+        return
+
+    selected_raw = st.selectbox(
+        "Select raw files folder",
+        dirs,
+        format_func=lambda x: str(x.relative_to(base_dir)),
+    )
+    selected_output = st.selectbox(
+        "Select output folder",
+        dirs,
+        index=0,
+        format_func=lambda x: str(x.relative_to(base_dir)),
+    )
+
+    raw_directory_path = str(selected_raw)
+    segmentation_output_dir = str(selected_output)
+
+    raw_files = []
+    if raw_directory_path and os.path.isdir(raw_directory_path):
+        raw_files = [entry.name for entry in os.scandir(raw_directory_path) if entry.is_file() and entry.name.lower().endswith('.tif')]
+
+    if raw_files:
+        st.markdown("---")
+        st.write(f"Found {len(raw_files)} .tif files in the selected raw directory.")
+        st.markdown("### Available raw files")
+
+        for file_name in sorted(raw_files):
+            sel_key = f"seg_selected_{file_name}"
+            done_key = f"seg_done_{file_name}"
+            run_key = f"seg_running_{file_name}"
+            if sel_key not in st.session_state:
+                st.session_state[sel_key] = False
+            if done_key not in st.session_state:
+                st.session_state[done_key] = False
+            if run_key not in st.session_state:
+                st.session_state[run_key] = False
+
+        pending_deselect = st.session_state.get("seg_deselect_pending", [])
+        if pending_deselect:
+            for sel_key in pending_deselect:
+                st.session_state[sel_key] = False
+            st.session_state["seg_deselect_pending"] = []
+
+        def update_select_all():
+            select_all_state = st.session_state.get("seg_select_all", False)
+            for file_name in raw_files:
+                st.session_state[f"seg_selected_{file_name}"] = select_all_state
+
+        select_all_key = "seg_select_all"
+        if select_all_key not in st.session_state:
+            st.session_state[select_all_key] = False
+
+        st.checkbox("Select All", key=select_all_key, on_change=update_select_all)
+
+        header_status, header_file = st.columns([1, 5])
+        header_status.markdown("**Status**")
+        header_file.markdown("**File**")
+
+        for file_name in sorted(raw_files):
+            sel_key = f"seg_selected_{file_name}"
+            done_key = f"seg_done_{file_name}"
+            run_key = f"seg_running_{file_name}"
+
+            if st.session_state.get(done_key, False):
+                status = "Completed"
+            elif st.session_state.get(run_key, False):
+                status = "Running"
+            elif st.session_state.get(sel_key, False):
+                status = "(Pending)"
+            else:
+                status = ""
+
+            status_col, file_col = st.columns([1, 5])
+            status_col.write(status)
+            file_col.checkbox(file_name, key=sel_key)
+
+    slurm_template = os.path.abspath(os.path.join(os.path.dirname(__file__), "slurm_segmentation.slurm"))
+    if not os.path.exists(slurm_template):
+        st.error(f"SLURM template not found: {slurm_template}")
+        return
+
+    if "segmentation_running" not in st.session_state:
+        st.session_state.segmentation_running = False
+    if "seg_stop" not in st.session_state:
+        st.session_state.seg_stop = False
+
+    col_submit, col_stop = st.columns(2)
+    submit_pressed = col_submit.button("Submit jobs", use_container_width=True)
+    stop_pressed = col_stop.button("Stop", use_container_width=True)
+
+    if stop_pressed:
+        st.session_state.seg_stop = True
+
+    if submit_pressed and not st.session_state.segmentation_running:
+        to_run = [f for f in raw_files if st.session_state.get(f"seg_selected_{f}")]
+        if not to_run:
+            st.warning("No files selected. Please select files to submit.")
+        else:
+            st.session_state.segmentation_running = True
+            st.session_state.seg_stop = False
+            for idx, fname in enumerate(to_run):
+                if st.session_state.seg_stop:
+                    st.info("Stopping further submissions.")
+                    break
+
+                input_val = os.path.join(raw_directory_path, fname)
+                output_val = segmentation_output_dir
+
+                tmp_slurm = slurm_template + f".tmp.{idx}.slurm"
+                try:
+                    _write_slurm_for(slurm_template, tmp_slurm, input_val, output_val)
+                except Exception as e:
+                    st.error(f"Failed to prepare slurm file for {fname}: {e}")
+                    continue
+
+                st.session_state[f"seg_running_{fname}"] = True
+                st.info(f"Submitting {fname}...")
+                jobid, finished_ok = _submit_and_wait(tmp_slurm)
+                st.session_state[f"seg_running_{fname}"] = False
+
+                if jobid is None:
+                    st.error(f"Submission failed for {fname}.")
+                    continue
+
+                if finished_ok:
+                    st.success(f"Job {jobid} finished for {fname}.")
+                    st.session_state[f"seg_done_{fname}"] = True
+                    pending_deselect = st.session_state.get("seg_deselect_pending", [])
+                    pending_deselect.append(f"seg_selected_{fname}")
+                    st.session_state["seg_deselect_pending"] = pending_deselect
+                else:
+                    st.warning(f"Job {jobid} was cancelled or stopped for {fname}.")
+
+            st.session_state.segmentation_running = False
+            st.session_state.seg_stop = False
+            if st.session_state.get("seg_deselect_pending"):
+                st.rerun()

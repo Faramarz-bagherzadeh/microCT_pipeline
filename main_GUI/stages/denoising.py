@@ -133,10 +133,13 @@ def render(config):
         for file_name in sorted(raw_files):
             sel_key = f"rek_selected_{file_name}"
             done_key = f"rek_done_{file_name}"
+            run_key = f"rek_running_{file_name}"
             if sel_key not in st.session_state:
                 st.session_state[sel_key] = False
             if done_key not in st.session_state:
                 st.session_state[done_key] = False
+            if run_key not in st.session_state:
+                st.session_state[run_key] = False
 
         # Apply any pending unselect actions before widget creation
         pending_deselect = st.session_state.get("rek_deselect_pending", [])
@@ -158,14 +161,29 @@ def render(config):
 
         st.checkbox("Select All", key=select_all_key, on_change=update_select_all)
 
-        # Display individual file checkboxes
+        # Header row for status and file name
+        header_status, header_file = st.columns([1, 5])
+        header_status.markdown("**Status**")
+        header_file.markdown("**File**")
+
+        # Display individual file rows
         for file_name in sorted(raw_files):
             sel_key = f"rek_selected_{file_name}"
             done_key = f"rek_done_{file_name}"
+            run_key = f"rek_running_{file_name}"
 
-            c1, c2 = st.columns([4, 1])
-            c1.checkbox(file_name, key=sel_key)
-            c2.checkbox("Done", value=st.session_state.get(done_key, False), disabled=True, key=f"disp_{done_key}")
+            if st.session_state.get(done_key, False):
+                status = "Completed"
+            elif st.session_state.get(run_key, False):
+                status = "Running"
+            elif st.session_state.get(sel_key, False):
+                status = "(Pending)"
+            else:
+                status = ""
+
+            status_col, file_col = st.columns([1, 5])
+            status_col.write(status)
+            file_col.checkbox(file_name, key=sel_key)
 
     slurm_template = os.path.abspath(os.path.join(os.path.dirname(__file__), "slurm_denoising.slurm"))
     if not os.path.exists(slurm_template):
@@ -208,8 +226,10 @@ def render(config):
                     st.error(f"Failed to prepare slurm file for {fname}: {e}")
                     continue
 
+                st.session_state[f"rek_running_{fname}"] = True
                 st.info(f"Submitting {fname}...")
                 jobid, finished_ok = _submit_and_wait(tmp_slurm)
+                st.session_state[f"rek_running_{fname}"] = False
                 if jobid is None:
                     st.error(f"Submission failed for {fname}.")
                     continue
