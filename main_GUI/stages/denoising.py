@@ -128,6 +128,8 @@ def render(config):
         st.markdown("---")
         st.write(f"Found {len(raw_files)} .rek files in the selected raw directory.")
         st.markdown("### Available raw files")
+
+        # Initialize session states for all files first
         for file_name in sorted(raw_files):
             sel_key = f"rek_selected_{file_name}"
             done_key = f"rek_done_{file_name}"
@@ -135,6 +137,24 @@ def render(config):
                 st.session_state[sel_key] = False
             if done_key not in st.session_state:
                 st.session_state[done_key] = False
+
+        # Define callback for Select All checkbox
+        def update_select_all():
+            select_all_state = st.session_state.get("rek_select_all", False)
+            for file_name in raw_files:
+                st.session_state[f"rek_selected_{file_name}"] = select_all_state
+
+        # Select All checkbox
+        select_all_key = "rek_select_all"
+        if select_all_key not in st.session_state:
+            st.session_state[select_all_key] = False
+
+        st.checkbox("Select All", key=select_all_key, on_change=update_select_all)
+
+        # Display individual file checkboxes
+        for file_name in sorted(raw_files):
+            sel_key = f"rek_selected_{file_name}"
+            done_key = f"rek_done_{file_name}"
 
             c1, c2 = st.columns([4, 1])
             c1.checkbox(file_name, key=sel_key)
