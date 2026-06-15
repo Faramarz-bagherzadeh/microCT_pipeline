@@ -172,7 +172,7 @@ def segmentation_by_weight_3(image, name):
     return binary , errors
 
 if __name__ == "__main__":
-    os.environ["OPENBLAS_NUM_THREADS"] = "64"
+    
 
     import cv2
     import numpy as np
@@ -181,7 +181,9 @@ if __name__ == "__main__":
     import time
     import os
     import argparse
-
+    os.environ["OPENBLAS_NUM_THREADS"] = "120"
+    os.environ["OMP_NUM_THREADS"] = "120"
+    os.environ["MKL_NUM_THREADS"] = "120"
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--input_dir", type=str, required=True)

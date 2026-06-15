@@ -63,6 +63,7 @@ if st.session_state.active_stage:
         st.error(f"Unknown stage: {stage}")
 
     st.markdown("---")
-    if st.button("Back to stage selection"):
-        st.session_state.active_stage = None
+    if stage not in ["1-Denoising", "2-Segmentation"]:
+        if st.button("Back to stage selection"):
+            st.session_state.active_stage = None
 
