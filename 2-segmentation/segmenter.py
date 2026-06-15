@@ -214,5 +214,5 @@ if __name__ == "__main__":
         #np.save(f'weight_errors/{name}_errors.npy', err_array)
     del data
     t2= time.time()
-    print ('Time (min) =', round((t2-t1)/60))
+    print ('Time (min) =', round((t2-t1)/60 , 1))
     tifffile.imwrite(output_dir+'/'+name+'.tif', segmented_data)

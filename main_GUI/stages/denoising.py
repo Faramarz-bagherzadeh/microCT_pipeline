@@ -144,27 +144,11 @@ def render(config):
         st.write(f"Found {len(raw_files)} .rek files in the selected raw directory.")
         st.markdown("### Available raw files")
 
-        # Initialize session states for all files first
+        # Initialize selection state for all files
         for file_name in sorted(raw_files):
             sel_key = f"rek_selected_{file_name}"
-            done_key = f"rek_done_{file_name}"
-            run_key = f"rek_running_{file_name}"
-            failed_key = f"rek_failed_{file_name}"
             if sel_key not in st.session_state:
                 st.session_state[sel_key] = False
-            if done_key not in st.session_state:
-                st.session_state[done_key] = False
-            if run_key not in st.session_state:
-                st.session_state[run_key] = False
-            if failed_key not in st.session_state:
-                st.session_state[failed_key] = False
-
-        # Apply any pending unselect actions before widget creation
-        pending_deselect = st.session_state.get("rek_deselect_pending", [])
-        if pending_deselect:
-            for sel_key in pending_deselect:
-                st.session_state[sel_key] = False
-            st.session_state["rek_deselect_pending"] = []
 
         # Define callback for Select All checkbox
         def update_select_all():
@@ -172,143 +156,74 @@ def render(config):
             for file_name in raw_files:
                 st.session_state[f"rek_selected_{file_name}"] = select_all_state
 
-        # Select All checkbox
         select_all_key = "rek_select_all"
         if select_all_key not in st.session_state:
             st.session_state[select_all_key] = False
 
         st.checkbox("Select All", key=select_all_key, on_change=update_select_all)
 
-        # Header row for status and file name
-        header_status, header_file = st.columns([1, 5])
-        header_status.markdown("**Status**")
-        header_file.markdown("**File**")
-
-        # Display individual file rows
+        # Display file checkboxes (no status column)
         for file_name in sorted(raw_files):
             sel_key = f"rek_selected_{file_name}"
-            done_key = f"rek_done_{file_name}"
-            run_key = f"rek_running_{file_name}"
-            failed_key = f"rek_failed_{file_name}"
-
-            if st.session_state.get(failed_key, False):
-                status = "Job Failed"
-            elif st.session_state.get(done_key, False):
-                status = "Completed"
-            elif st.session_state.get(run_key, False):
-                status = "Running"
-            elif st.session_state.get(sel_key, False):
-                status = "(Pending)"
-            else:
-                status = ""
-
-            status_col, file_col = st.columns([1, 5])
-            status_col.write(status)
-            file_col.checkbox(file_name, key=sel_key)
+            st.checkbox(file_name, key=sel_key)
 
     slurm_template = os.path.abspath(os.path.join(os.path.dirname(__file__), "slurm_denoising.slurm"))
     if not os.path.exists(slurm_template):
         st.error(f"SLURM template not found: {slurm_template}")
         return
 
-    if "denoise_running" not in st.session_state:
-        st.session_state.denoise_running = False
-    if "denoise_stop" not in st.session_state:
-        st.session_state.denoise_stop = False
-    if "denoise_queue" not in st.session_state:
-        st.session_state.denoise_queue = []
-    if "denoise_queue_index" not in st.session_state:
-        st.session_state.denoise_queue_index = 0
-    if "denoise_phase" not in st.session_state:
-        st.session_state.denoise_phase = ""
-
     col_submit, col_stop = st.columns(2)
     submit_pressed = col_submit.button("Submit jobs", use_container_width=True)
+    # stop button kept for compatibility but does nothing in fire-and-forget mode
     stop_pressed = col_stop.button("Stop", use_container_width=True)
 
-    if stop_pressed:
-        st.session_state.denoise_stop = True
-
-    if submit_pressed and not st.session_state.denoise_running:
-        # collect selected files and initialize the queue
+    if submit_pressed:
+        # collect selected files
         to_run = [f for f in raw_files if st.session_state.get(f"rek_selected_{f}")]
         if not to_run:
             st.warning("No files selected. Please select files to submit.")
         else:
-            st.session_state.denoise_running = True
-            st.session_state.denoise_stop = False
-            st.session_state.denoise_queue = to_run
-            st.session_state.denoise_queue_index = 0
-            st.session_state.denoise_phase = "start_job"
-            st.session_state["rek_deselect_pending"] = []
-            for fname in to_run:
-                st.session_state[f"rek_failed_{fname}"] = False
-            st.rerun()
+            # unique parent directories of selected files
+            dirs = sorted(set(os.path.dirname(os.path.join(raw_directory_path, f)) for f in to_run))
+            # build a script that contains DIRS array and uses SLURM_ARRAY_TASK_ID
+            try:
+                with open(slurm_template, "r", encoding="utf-8") as f:
+                    text = f.read()
+            except Exception as e:
+                st.error(f"Failed to read slurm template: {e}")
+                return
 
-    if st.session_state.denoise_running and st.session_state.denoise_queue:
-        queue = st.session_state.denoise_queue
-        idx = st.session_state.denoise_queue_index
-        if idx < len(queue):
-            fname = queue[idx]
-            if st.session_state.denoise_phase == "start_job":
-                st.session_state[f"rek_running_{fname}"] = True
-                st.session_state.denoise_phase = "run_job"
-                st.rerun()
-            elif st.session_state.denoise_phase == "run_job":
-                if st.session_state.denoise_stop:
-                    st.info("Stopping further submissions.")
-                    st.session_state.denoise_running = False
-                    st.session_state.denoise_phase = ""
-                    st.session_state.denoise_queue = []
-                    st.session_state.denoise_queue_index = 0
-                else:
-                    input_val = os.path.join(raw_directory_path, fname)
-                    output_val = denoising_output_dir
+            # create bash array of directories (quoted)
+            dir_entries = " ".join(f'"{d}"' for d in dirs)
+            dirs_array_snippet = f"DIRS=( {dir_entries} )\nINPUT_DIR=\"${{DIRS[$SLURM_ARRAY_TASK_ID]}}\""
 
-                    tmp_slurm = slurm_template + f".tmp.{idx}.slurm"
-                    try:
-                        _write_slurm_for(slurm_template, tmp_slurm, input_val, output_val)
-                    except Exception as e:
-                        st.error(f"Failed to prepare slurm file for {fname}: {e}")
-                        st.session_state[f"rek_running_{fname}"] = False
-                        st.session_state.denoise_running = False
-                        st.session_state.denoise_phase = ""
-                        st.session_state.denoise_queue = []
-                        st.session_state.denoise_queue_index = 0
-                        st.rerun()
+            # replace INPUT_DIR and OUTPUT_DIR in template
+            text = re.sub(r'INPUT_DIR\s*=.*', dirs_array_snippet, text)
+            text = re.sub(r'OUTPUT_DIR\s*=.*', f'OUTPUT_DIR="{denoising_output_dir}"', text)
 
-                    st.info(f"Submitting {fname}...")
-                    jobid, job_state = _submit_and_wait(tmp_slurm)
-                    st.session_state[f"rek_running_{fname}"] = False
-                    if jobid is None:
-                        st.error(f"Submission failed for {fname}.")
-                        st.session_state[f"rek_failed_{fname}"] = True
-                    else:
-                        if job_state == "COMPLETED":
-                            st.success(f"Job {jobid} finished for {fname}.")
-                            st.session_state[f"rek_done_{fname}"] = True
-                            pending_deselect = st.session_state.get("rek_deselect_pending", [])
-                            pending_deselect.append(f"rek_selected_{fname}")
-                            st.session_state["rek_deselect_pending"] = pending_deselect
-                        elif job_state == "STOPPED":
-                            st.warning(f"Job {jobid} stopped for {fname}.")
-                        else:
-                            st.error(f"Job {jobid} failed for {fname}. State: {job_state}")
-                            st.session_state[f"rek_failed_{fname}"] = True
+            array_slurm = slurm_template + ".array.tmp.slurm"
+            try:
+                with open(array_slurm, "w", encoding="utf-8") as f:
+                    f.write(text)
+            except Exception as e:
+                st.error(f"Failed to write array slurm file: {e}")
+                return
 
-                    st.session_state.denoise_queue_index += 1
-                    if st.session_state.denoise_queue_index < len(queue):
-                        st.session_state.denoise_phase = "start_job"
-                        st.rerun()
-                    else:
-                        st.session_state.denoise_running = False
-                        st.session_state.denoise_phase = ""
-                        st.session_state.denoise_queue = []
-                        st.session_state.denoise_queue_index = 0
-                        if st.session_state.get("rek_deselect_pending"):
-                            st.rerun()
-        else:
-            st.session_state.denoise_running = False
-            st.session_state.denoise_phase = ""
-            st.session_state.denoise_queue = []
-            st.session_state.denoise_queue_index = 0
+            # submit as array with concurrency limit 3
+            array_spec = f"0-{len(dirs)-1}%3" if len(dirs) > 1 else "0-0%3"
+            try:
+                completed = subprocess.run(["sbatch", f"--array={array_spec}", array_slurm], capture_output=True, text=True)
+            except Exception as e:
+                st.error(f"Failed to run sbatch for array job: {e}")
+                return
+
+            out = completed.stdout + completed.stderr
+            m = re.search(r"Submitted batch job (\d+)", out)
+            if m:
+                jobid = m.group(1)
+                st.success(f"Submitted array job {jobid} for {len(dirs)} directories (concurrency capped at 3)")
+                # deselect the submitted files immediately
+                for fname in to_run:
+                    st.session_state[f"rek_selected_{fname}"] = False
+            else:
+                st.error(f"Could not determine job id from sbatch output:\n{out}")

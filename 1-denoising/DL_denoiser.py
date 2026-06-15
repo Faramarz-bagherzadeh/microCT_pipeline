@@ -279,7 +279,7 @@ if __name__ == "__main__":
         
     
     t2= time.time()
-    print ('Time (h) =', round((t2-t1)/3600,1))
+    print ('Time (h) =', round((t2-t1)/3600,2))
         
     
     
