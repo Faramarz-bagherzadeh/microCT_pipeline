@@ -138,6 +138,13 @@ def render(config):
             if done_key not in st.session_state:
                 st.session_state[done_key] = False
 
+        # Apply any pending unselect actions before widget creation
+        pending_deselect = st.session_state.get("rek_deselect_pending", [])
+        if pending_deselect:
+            for sel_key in pending_deselect:
+                st.session_state[sel_key] = False
+            st.session_state["rek_deselect_pending"] = []
+
         # Define callback for Select All checkbox
         def update_select_all():
             select_all_state = st.session_state.get("rek_select_all", False)
@@ -210,11 +217,14 @@ def render(config):
                 if finished_ok:
                     st.success(f"Job {jobid} finished for {fname}.")
                     st.session_state[f"rek_done_{fname}"] = True
-                    # uncheck selection
-                    st.session_state[f"rek_selected_{fname}"] = False
-                    st.rerun()
+                    # schedule uncheck for the next rerun
+                    pending_deselect = st.session_state.get("rek_deselect_pending", [])
+                    pending_deselect.append(f"rek_selected_{fname}")
+                    st.session_state["rek_deselect_pending"] = pending_deselect
                 else:
                     st.warning(f"Job {jobid} was cancelled or stopped for {fname}.")
 
             st.session_state.denoise_running = False
             st.session_state.denoise_stop = False
+            if st.session_state.get("rek_deselect_pending"):
+                st.rerun()
