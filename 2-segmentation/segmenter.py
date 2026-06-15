@@ -181,9 +181,9 @@ if __name__ == "__main__":
     import time
     import os
     import argparse
-    os.environ["OPENBLAS_NUM_THREADS"] = "120"
-    os.environ["OMP_NUM_THREADS"] = "120"
-    os.environ["MKL_NUM_THREADS"] = "120"
+    os.environ["OPENBLAS_NUM_THREADS"] = str(os.cpu_count()-10)
+    os.environ["OMP_NUM_THREADS"] = "1"
+    os.environ["MKL_NUM_THREADS"] = "1"
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--input_dir", type=str, required=True)
