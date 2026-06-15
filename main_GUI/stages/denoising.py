@@ -212,6 +212,7 @@ def render(config):
                     st.session_state[f"rek_done_{fname}"] = True
                     # uncheck selection
                     st.session_state[f"rek_selected_{fname}"] = False
+                    st.rerun()
                 else:
                     st.warning(f"Job {jobid} was cancelled or stopped for {fname}.")
 

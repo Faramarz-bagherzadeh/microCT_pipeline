@@ -210,6 +210,7 @@ if __name__ == "__main__":
 
     print("Input directory:", input_dir)
     print("Output directory:", output_dir)
+    print("Model path:", model_path)
 
 
     
@@ -274,7 +275,7 @@ if __name__ == "__main__":
     print ('final output shape = ', output.shape)
     print ('saving image...')
 
-    tifffile.imwrite(output_dir + name + '.tif', output,photometric='minisblack',metadata=metadata,imagej=True)
+    tifffile.imwrite(output_dir + '/' + name + '.tif', output,photometric='minisblack',metadata=metadata,imagej=True)
         
     
     t2= time.time()
