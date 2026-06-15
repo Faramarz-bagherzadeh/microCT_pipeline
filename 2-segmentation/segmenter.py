@@ -172,7 +172,8 @@ def segmentation_by_weight_3(image, name):
     return binary , errors
 
 if __name__ == "__main__":
-    from joblib import Parallel, delayed
+    os.environ["OPENBLAS_NUM_THREADS"] = "64"
+
     import cv2
     import numpy as np
     import tifffile
