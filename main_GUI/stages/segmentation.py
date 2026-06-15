@@ -34,18 +34,35 @@ def _write_slurm_for(template_path, target_path, input_value, output_value):
         f.write(text)
 
 
+def _get_slurm_job_state(jobid):
+    try:
+        completed = subprocess.run(
+            ["sacct", "-j", jobid, "--format=State", "--noheader", "-P"],
+            capture_output=True,
+            text=True,
+        )
+        if completed.returncode != 0:
+            return None
+        lines = [line.strip() for line in completed.stdout.splitlines() if line.strip()]
+        if not lines:
+            return None
+        return lines[0].split("|")[0]
+    except Exception:
+        return None
+
+
 def _submit_and_wait(slurm_file, stop_flag_key="seg_stop", poll_interval=5):
     try:
         completed = subprocess.run(["sbatch", slurm_file], capture_output=True, text=True)
     except Exception as e:
         st.error(f"Failed to run sbatch: {e}")
-        return None, False
+        return None, "SUBMIT_FAILED"
 
     out = completed.stdout + completed.stderr
     m = re.search(r"Submitted batch job (\d+)", out)
     if not m:
         st.error(f"Could not determine job id from sbatch output:\n{out}")
-        return None, False
+        return None, "SUBMIT_FAILED"
     jobid = m.group(1)
 
     while True:
@@ -54,14 +71,16 @@ def _submit_and_wait(slurm_file, stop_flag_key="seg_stop", poll_interval=5):
                 subprocess.run(["scancel", jobid], capture_output=True, text=True)
             except Exception:
                 pass
-            return jobid, False
+            return jobid, "STOPPED"
 
         try:
             q = subprocess.run(["squeue", "-j", jobid], capture_output=True, text=True)
             if q.returncode != 0 or (jobid not in q.stdout):
-                return jobid, True
+                state = _get_slurm_job_state(jobid)
+                return jobid, state or "UNKNOWN"
         except Exception:
-            return jobid, True
+            state = _get_slurm_job_state(jobid)
+            return jobid, state or "UNKNOWN"
 
         time.sleep(poll_interval)
 
@@ -115,12 +134,15 @@ def render(config):
             sel_key = f"seg_selected_{file_name}"
             done_key = f"seg_done_{file_name}"
             run_key = f"seg_running_{file_name}"
+            failed_key = f"seg_failed_{file_name}"
             if sel_key not in st.session_state:
                 st.session_state[sel_key] = False
             if done_key not in st.session_state:
                 st.session_state[done_key] = False
             if run_key not in st.session_state:
                 st.session_state[run_key] = False
+            if failed_key not in st.session_state:
+                st.session_state[failed_key] = False
 
         pending_deselect = st.session_state.get("seg_deselect_pending", [])
         if pending_deselect:
@@ -147,8 +169,11 @@ def render(config):
             sel_key = f"seg_selected_{file_name}"
             done_key = f"seg_done_{file_name}"
             run_key = f"seg_running_{file_name}"
+            failed_key = f"seg_failed_{file_name}"
 
-            if st.session_state.get(done_key, False):
+            if st.session_state.get(failed_key, False):
+                status = "Job Failed"
+            elif st.session_state.get(done_key, False):
                 status = "Completed"
             elif st.session_state.get(run_key, False):
                 status = "Running"
@@ -195,6 +220,8 @@ def render(config):
             st.session_state.seg_queue_index = 0
             st.session_state.seg_phase = "start_job"
             st.session_state["seg_deselect_pending"] = []
+            for fname in to_run:
+                st.session_state[f"seg_failed_{fname}"] = False
             st.rerun()
 
     if st.session_state.segmentation_running and st.session_state.seg_queue:
@@ -223,6 +250,7 @@ def render(config):
                     except Exception as e:
                         st.error(f"Failed to prepare slurm file for {fname}: {e}")
                         st.session_state[f"seg_running_{fname}"] = False
+                        st.session_state[f"seg_failed_{fname}"] = True
                         st.session_state.segmentation_running = False
                         st.session_state.seg_phase = ""
                         st.session_state.seg_queue = []
@@ -230,19 +258,24 @@ def render(config):
                         st.rerun()
 
                     st.info(f"Submitting {fname}...")
-                    jobid, finished_ok = _submit_and_wait(tmp_slurm)
+                    jobid, job_state = _submit_and_wait(tmp_slurm)
                     st.session_state[f"seg_running_{fname}"] = False
 
                     if jobid is None:
                         st.error(f"Submission failed for {fname}.")
-                    elif finished_ok:
-                        st.success(f"Job {jobid} finished for {fname}.")
-                        st.session_state[f"seg_done_{fname}"] = True
-                        pending_deselect = st.session_state.get("seg_deselect_pending", [])
-                        pending_deselect.append(f"seg_selected_{fname}")
-                        st.session_state["seg_deselect_pending"] = pending_deselect
+                        st.session_state[f"seg_failed_{fname}"] = True
                     else:
-                        st.warning(f"Job {jobid} was cancelled or stopped for {fname}.")
+                        if job_state == "COMPLETED":
+                            st.success(f"Job {jobid} finished for {fname}.")
+                            st.session_state[f"seg_done_{fname}"] = True
+                            pending_deselect = st.session_state.get("seg_deselect_pending", [])
+                            pending_deselect.append(f"seg_selected_{fname}")
+                            st.session_state["seg_deselect_pending"] = pending_deselect
+                        elif job_state == "STOPPED":
+                            st.warning(f"Job {jobid} stopped for {fname}.")
+                        else:
+                            st.error(f"Job {jobid} failed for {fname}. State: {job_state}")
+                            st.session_state[f"seg_failed_{fname}"] = True
 
                     st.session_state.seg_queue_index += 1
                     if st.session_state.seg_queue_index < len(queue):

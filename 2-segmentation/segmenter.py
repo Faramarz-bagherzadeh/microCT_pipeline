@@ -60,7 +60,6 @@ def GMM_seg(img):
 
 def binary_seg_kMeans(img):
     from sklearn.cluster import KMeans
-    from joblib import parallel_backend
     print ('K-Mean started !')
     constant = 0
 
@@ -71,9 +70,8 @@ def binary_seg_kMeans(img):
     if len(pixels) < 1e3:
         return binary
 
-    with parallel_backend('threading', n_jobs=1):
-        kmeans = KMeans(n_init=4, n_clusters=2,)
-        kmeans.fit(pixels)
+    kmeans = KMeans(n_init=4, n_clusters=2,)
+    kmeans.fit(pixels)
 
     centers = kmeans.cluster_centers_
     thresh = (centers[0] + centers[1])/2
