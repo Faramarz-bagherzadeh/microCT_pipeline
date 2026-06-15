@@ -1,6 +1,5 @@
 import os
 import re
-import time
 import subprocess
 import streamlit as st
 import json
@@ -44,57 +43,6 @@ def _write_slurm_for(template_path, target_path, input_value, output_value):
 
     with open(target_path, "w", encoding="utf-8") as f:
         f.write(text)
-
-
-def _get_slurm_job_state(jobid):
-    try:
-        completed = subprocess.run(
-            ["sacct", "-j", jobid, "--format=State", "--noheader", "-P"],
-            capture_output=True,
-            text=True,
-        )
-        if completed.returncode != 0:
-            return None
-        lines = [line.strip() for line in completed.stdout.splitlines() if line.strip()]
-        if not lines:
-            return None
-        return lines[0].split("|")[0]
-    except Exception:
-        return None
-
-
-def _submit_and_wait(slurm_file, stop_flag_key="denoise_stop", poll_interval=5):
-    try:
-        completed = subprocess.run(["sbatch", slurm_file], capture_output=True, text=True)
-    except Exception as e:
-        st.error(f"Failed to run sbatch: {e}")
-        return None, "SUBMIT_FAILED"
-
-    out = completed.stdout + completed.stderr
-    m = re.search(r"Submitted batch job (\d+)", out)
-    if not m:
-        st.error(f"Could not determine job id from sbatch output:\n{out}")
-        return None, "SUBMIT_FAILED"
-    jobid = m.group(1)
-
-    while True:
-        if st.session_state.get(stop_flag_key):
-            try:
-                subprocess.run(["scancel", jobid], capture_output=True, text=True)
-            except Exception:
-                pass
-            return jobid, "STOPPED"
-
-        try:
-            q = subprocess.run(["squeue", "-j", jobid], capture_output=True, text=True)
-            if q.returncode != 0 or (jobid not in q.stdout):
-                state = _get_slurm_job_state(jobid)
-                return jobid, state or "UNKNOWN"
-        except Exception:
-            state = _get_slurm_job_state(jobid)
-            return jobid, state or "UNKNOWN"
-
-        time.sleep(poll_interval)
 
 
 def render(config):
@@ -183,9 +131,9 @@ def render(config):
         if not to_run:
             st.warning("No files selected. Please select files to submit.")
         else:
-            # unique parent directories of selected files
-            dirs = sorted(set(os.path.dirname(os.path.join(raw_directory_path, f)) for f in to_run))
-            # build a script that contains DIRS array and uses SLURM_ARRAY_TASK_ID
+            # full file paths of selected .rek files
+            files = [os.path.join(raw_directory_path, f) for f in sorted(to_run)]
+            # build a script that contains FILES array and uses SLURM_ARRAY_TASK_ID
             try:
                 with open(slurm_template, "r", encoding="utf-8") as f:
                     text = f.read()
@@ -193,12 +141,12 @@ def render(config):
                 st.error(f"Failed to read slurm template: {e}")
                 return
 
-            # create bash array of directories (quoted)
-            dir_entries = " ".join(f'"{d}"' for d in dirs)
-            dirs_array_snippet = f"DIRS=( {dir_entries} )\nINPUT_DIR=\"${{DIRS[$SLURM_ARRAY_TASK_ID]}}\""
+            # create bash array of file paths (quoted)
+            file_entries = " ".join(f'"{path}"' for path in files)
+            files_array_snippet = f"FILES=( {file_entries} )\nINPUT_DIR=\"${{FILES[$SLURM_ARRAY_TASK_ID]}}\""
 
             # replace INPUT_DIR and OUTPUT_DIR in template
-            text = re.sub(r'INPUT_DIR\s*=.*', dirs_array_snippet, text)
+            text = re.sub(r'INPUT_DIR\s*=.*', files_array_snippet, text)
             text = re.sub(r'OUTPUT_DIR\s*=.*', f'OUTPUT_DIR="{denoising_output_dir}"', text)
 
             array_slurm = slurm_template + ".array.tmp.slurm"
@@ -210,7 +158,7 @@ def render(config):
                 return
 
             # submit as array with concurrency limit 3
-            array_spec = f"0-{len(dirs)-1}%3" if len(dirs) > 1 else "0-0%3"
+            array_spec = f"0-{len(files)-1}%3" if len(files) > 1 else "0-0%3"
             try:
                 completed = subprocess.run(["sbatch", f"--array={array_spec}", array_slurm], capture_output=True, text=True)
             except Exception as e:
@@ -221,9 +169,6 @@ def render(config):
             m = re.search(r"Submitted batch job (\d+)", out)
             if m:
                 jobid = m.group(1)
-                st.success(f"Submitted array job {jobid} for {len(dirs)} directories (concurrency capped at 3)")
-                # deselect the submitted files immediately
-                for fname in to_run:
-                    st.session_state[f"rek_selected_{fname}"] = False
+                st.success(f"Submitted array job {jobid} for {len(files)} files (concurrency capped at 3)")
             else:
                 st.error(f"Could not determine job id from sbatch output:\n{out}")
