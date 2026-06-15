@@ -16,9 +16,10 @@ module load conda
 source deactivate
 conda activate faramarz-env
 
-INPUT_DIR="/albedo/work/projects/p_ICECTai/B51/B51_bag99_hxfb101ms_block_0.rek"
-OUTPUT_DIR="/albedo/work/projects/p_ICECTai/denoised_B51/"
+INPUT_DIR=""
+OUTPUT_DIR=""
+PROJECT_DIR="/albedo/work/projects/p_ICECTai/microCT_pipeline"
 
-python -u denoising.py\
+python -u "$PROJECT_DIR/1-denoising/DL_denoiser.py" \
     --input_dir "$INPUT_DIR" \
     --output_dir "$OUTPUT_DIR"

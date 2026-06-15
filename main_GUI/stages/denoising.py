@@ -1,5 +1,4 @@
 import os
-import os
 import re
 import time
 import subprocess
@@ -141,7 +140,7 @@ def render(config):
             c1.checkbox(file_name, key=sel_key)
             c2.checkbox("Done", value=st.session_state.get(done_key, False), disabled=True, key=f"disp_{done_key}")
 
-    slurm_template = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "1-denoising", "1_slurm_job_GPU_.slurm"))
+    slurm_template = os.path.abspath(os.path.join(os.path.dirname(__file__), "slurm_denoising.slurm"))
     if not os.path.exists(slurm_template):
         st.error(f"SLURM template not found: {slurm_template}")
         return
