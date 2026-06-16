@@ -6,7 +6,7 @@
 #SBATCH --qos=48h
 #SBATCH --cpus-per-task 128
 #SBATCH --time=47:00:00
-#SBATCH --job-name=Segmentation
+#SBATCH --job-name=SegmentKmean
 #SBATCH --output=logs/Segmentation_log.%j.out
 
 module load mesa
@@ -21,3 +21,4 @@ PROJECT_DIR="/albedo/work/projects/p_ICECTai/microCT_pipeline"
 python -u "$PROJECT_DIR/2-segmentation/segmenter.py" \
     --input_dir "$INPUT_DIR" \
     --output_dir "$OUTPUT_DIR" \
+
