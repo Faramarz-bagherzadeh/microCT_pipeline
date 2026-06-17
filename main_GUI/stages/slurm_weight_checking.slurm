@@ -1,4 +1,5 @@
 #!/bin/bash -l
+#SBATCH --account=glaz.glaz
 #SBATCH --partition=smp
 #SBATCH --nodes=1
 #SBATCH --tasks-per-node 1
