@@ -99,6 +99,8 @@ if __name__ == "__main__":
     df['error'] = df['estimated_weight'] - df['actual_weight']
     df['error_percent'] = df['error'] / df['actual_weight'] * 100
     df.to_excel(output_dir + '/estimated_weights.xlsx', index=False)
+    print ('Saved estimated weights to: ', output_dir + '/estimated_weights.xlsx')
+
     plt.figure()
     plt.scatter(df['actual_weight'], df['estimated_weight'])
     plt.xlabel('Actual Weight (g)')
@@ -115,3 +117,4 @@ if __name__ == "__main__":
     plt.title('Weight Estimation Error vs. Depth')
     plt.savefig(output_dir + '/fig2.png')
     plt.close()
+    print ('Saved figures to: ', output_dir)
