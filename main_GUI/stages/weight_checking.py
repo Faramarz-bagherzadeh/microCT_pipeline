@@ -62,6 +62,22 @@ def get_excel_files(directory):
     return sorted(files)
 
 
+FINISHED_STATES = {"COMPLETED", "FAILED", "TIMEOUT", "CANCELLED", "NODE_FAIL", "PREEMPTED", "OUT_OF_MEMORY"}
+
+
+def check_job_status(job_id):
+    """Check SLURM job status using sacct.  Returns the state string or 'UNKNOWN'."""
+    try:
+        result = subprocess.run(
+            ["sacct", "-j", str(job_id), "--format", "State", "--noheader", "-X"],
+            capture_output=True, text=True, timeout=10,
+        )
+        state = result.stdout.strip().splitlines()
+        return state[0].strip() if state else "UNKNOWN"
+    except Exception:
+        return "UNKNOWN"
+
+
 def render(config):
     st.subheader(STAGE_NAME)
     st.write("Select the input directories, the weights Excel file, and the output directory for weight checking.")
@@ -184,36 +200,77 @@ def render(config):
             st.session_state["weight_check_job_id"] = jobid
             st.session_state["weight_check_submit_time"] = time.time()
             st.session_state["weight_check_output_dir"] = output_directory_path
+            # Clear any stale completion state
+            st.session_state.pop("weight_check_job_completed_time", None)
+            st.session_state.pop("weight_check_figures_shown", None)
+            st.rerun()
         else:
             st.error(f"Could not determine job id from sbatch output:\n{out}")
 
-    # After submission, wait 2 minutes then show the "Show Figures" button
-    if "weight_check_submit_time" in st.session_state:
-        elapsed = time.time() - st.session_state["weight_check_submit_time"]
-        remaining = 120 - elapsed
+    # ===== Post-submission flow =====
+    # Check if we have an active job to monitor
+    if "weight_check_job_id" in st.session_state:
+        job_id = st.session_state["weight_check_job_id"]
+        output_dir = st.session_state.get("weight_check_output_dir", "")
+        fig1_path = os.path.join(output_dir, "fig1.png")
+        fig2_path = os.path.join(output_dir, "fig2.png")
+        post_completion_delay = 120  # 2 minutes in seconds
 
-        if remaining > 0:
-            st.info(f"Job submitted. Please wait {int(remaining)} more seconds before viewing figures...")
-            if st.button("Check Now (skip wait)", use_container_width=True):
-                remaining = 0
+        # --- Phase 1: Waiting for the SLURM job to finish ---
+        if "weight_check_job_completed_time" not in st.session_state:
+            status = check_job_status(job_id)
+            st.info(f"Job {job_id} is running. Current status: {status}")
 
-        if remaining <= 0:
-            output_dir = st.session_state.get("weight_check_output_dir", "")
-            fig1_path = os.path.join(output_dir, "fig1.png")
-            fig2_path = os.path.join(output_dir, "fig2.png")
+            if status in FINISHED_STATES:
+                # Job just finished – record the completion time
+                st.session_state["weight_check_job_completed_time"] = time.time()
+                st.rerun()
+            else:
+                st.write("Waiting for the SLURM job to finish. Check again shortly.")
+                if st.button("Check Job Status", use_container_width=True):
+                    st.rerun()
 
-            if st.button("Show Figures", use_container_width=True):
-                col1, col2 = st.columns(2)
-                with col1:
-                    if os.path.exists(fig1_path):
-                        img1 = Image.open(fig1_path)
-                        st.image(img1, caption="Fig 1", use_container_width=True)
-                    else:
-                        st.warning(f"fig1.png not found in {output_dir}")
+        # --- Phase 2: Job finished, waiting 2 minutes post-completion ---
+        elif "weight_check_figures_shown" not in st.session_state:
+            completed_time = st.session_state["weight_check_job_completed_time"]
+            elapsed_since_completion = time.time() - completed_time
+            remaining = post_completion_delay - elapsed_since_completion
 
-                with col2:
-                    if os.path.exists(fig2_path):
-                        img2 = Image.open(fig2_path)
-                        st.image(img2, caption="Fig 2", use_container_width=True)
-                    else:
-                        st.warning(f"fig2.png not found in {output_dir}")
+            if remaining > 0:
+                st.info(
+                    f"Job {job_id} has finished. "
+                    f"Waiting {int(remaining)} more seconds before displaying figures..."
+                )
+                if st.button("Show Figures Now (skip wait)", use_container_width=True):
+                    # Skip the remainder of the 2-minute delay
+                    st.session_state["weight_check_figures_shown"] = True
+                    st.rerun()
+            else:
+                # 2 minutes have passed – auto-display figures
+                st.session_state["weight_check_figures_shown"] = True
+                st.rerun()
+
+        # --- Phase 3: Show the figures (auto-displayed) ---
+        if st.session_state.get("weight_check_figures_shown", False):
+            col1, col2 = st.columns(2)
+            with col1:
+                if os.path.exists(fig1_path):
+                    img1 = Image.open(fig1_path)
+                    st.image(img1, caption="Fig 1", use_container_width=True)
+                else:
+                    st.warning(f"fig1.png not found in {output_dir}")
+
+            with col2:
+                if os.path.exists(fig2_path):
+                    img2 = Image.open(fig2_path)
+                    st.image(img2, caption="Fig 2", use_container_width=True)
+                else:
+                    st.warning(f"fig2.png not found in {output_dir}")
+
+            # Allow the user to dismiss / reset
+            if st.button("Clear & Submit New Job", use_container_width=True):
+                for key in ["weight_check_job_id", "weight_check_submit_time",
+                            "weight_check_output_dir", "weight_check_job_completed_time",
+                            "weight_check_figures_shown"]:
+                    st.session_state.pop(key, None)
+                st.rerun()

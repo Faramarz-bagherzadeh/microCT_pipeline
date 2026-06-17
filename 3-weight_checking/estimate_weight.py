@@ -1,5 +1,6 @@
 def get_ice_volume(image,thresh1,pixel_length):
     import cv2
+    import numpy as np
     final_mask = np.zeros_like(image)
     for i in range(image.shape[0]):
         img = image[i]
@@ -35,70 +36,82 @@ def weight_estimation(img, pixel_length, density):
 
     return weight
 
-def uncertainity_function (img_seg, pixel_volume, density):
-    from skimage.segmentation import find_boundaries
-    uncertainity = 0
-    step = 100
-    for s in range (0,img_seg.shape[0],step):
-        print ('steps = ',s,s+step)
-        if s+step > data.shape[0]:
-            img = img_seg[s:,:,:]
-        else:
-            img = img_seg[s:s+step,:,:]
 
-        boundary = find_boundaries(img, connectivity=1, mode='outer', background=0)
-        boundary_pixel_count = np.sum(boundary)
-        uncertainity += boundary_pixel_count * (pixel_volume *0.5) * density
-    return uncertainity
-
-def get_real_porousity (img_seg, pixel_volume, density):
-    from skimage.segmentation import find_boundaries
-    uncertainity = 0
-    step = 100
-    for s in range (0,img_seg.shape[0],step):
-        print ('steps = ',s,s+step)
-        if s+step > data.shape[0]:
-            img = img_seg[s:,:,:]
-        else:
-            img = img_seg[s:s+step,:,:]
-
-        boundary = find_boundaries(img, connectivity=1, mode='outer', background=0)
-        boundary_pixel_count = np.sum(boundary)
-        uncertainity += boundary_pixel_count * (pixel_volume *0.5) * density
-    return uncertainity
 
 if __name__ == "__main__":
     import numpy as np
     import tifffile
     import glob
     import pandas as pd
-    df = pd.DataFrame(columns=['name','weight'])
-    weights = []
+    import argparse
+    import matplotlib.pyplot as plt
+    import os
+
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument("--weights_file", type=str, required=True)
+    parser.add_argument("--output_dir", type=str, required=True)
+    parser.add_argument("--tiff_dir", type=str, required=True)
+
+    args = parser.parse_args()
+
+    weights_file = args.weights_file
+    output_dir = args.output_dir
+    tiff_dir = args.tiff_dir
+
+    print("Weights file:", weights_file)
+    print("Output directory:", output_dir)
+    print("TIFF directory:", tiff_dir)
+    pixel_length=0.01198 #cm 
+    density = 0.917 #g/cm3
+    print ('pixel_length = ', pixel_length, 'cm')
+    print ('density = ', density, 'g/cm3')
+
+    df = pd.DataFrame(columns=['file_name', 'depth', 'estimated_weight', 'actual_weight'])
+    estimated_weights = []
+    actual_weights = []
     names = []
-    
-    pixel_length=0.00601035
-    density = 0.917
-    paths = glob.glob('../B40_SR_seg/*.tif')
-    print(paths)
+    depths = []
+    paths = glob.glob(tiff_dir + '/*.tif')
     print ('number of files =' ,len(paths))
+    original_weight_df = pd.read_excel(weights_file)
 
     for f in paths:
 
         data = tifffile.imread(f)
         name = f.split('/')[-1].split('.')[0]
         print ('*********************************************')
-
+        print ('processing file: ', name)
         print ('shape = ',data.shape)
-        weight = weight_estimation(data, pixel_length=pixel_length, density =density )
-        print (name, ', weight =  ', weight)
-        #unc = uncertainity_function(data, pixel_volume=pixel_length**3, density=density)
-        #print (name, ', uncertainity =  ', unc)
-        #ice_volume = get_ice_volume(data,0.5, pixel_length)
-        #print (name, ', ice volume = ', ice_volume)
-        weights.append(weight)
-        names.append(name)
+        try :
+            actual_weights.append(original_weight_df[original_weight_df['file_name'] == name]['weight'].values[0])
+            depths.append(original_weight_df[original_weight_df['file_name'] == name]['depth'].values[0] )
+            estimated_weights.append(weight_estimation(data, pixel_length=pixel_length, density =density ))
+            names.append(name)
+        except Exception as e:
+            print(f"Error processing on :{name}: {e}")
 
-    df.weight = weights
-    df.name = names
-    df.to_excel('estimated_weights.xlsx', index=False)
-        
+
+    df['estimated_weight'] = estimated_weights
+    df['file_name'] = names
+    df['depth'] = depths
+    df['actual_weight'] = actual_weights
+    df['error'] = df['estimated_weight'] - df['actual_weight']
+    df['error_percent'] = df['error'] / df['actual_weight'] * 100
+    df.to_excel(output_dir + '/estimated_weights.xlsx', index=False)
+    plt.figure()
+    plt.scatter(df['actual_weight'], df['estimated_weight'])
+    plt.xlabel('Actual Weight (g)')
+    plt.ylabel('Estimated Weight (g)')
+    plt.title('Weight Estimation Comparison')
+    plt.savefig(output_dir + '/fig1.png')
+    plt.close()
+
+    plt.figure()
+    plt.title('Estimtated - Actual Weight vs. Depth')
+    plt.scatter(df['depth'], df['error_percent'])
+    plt.xlabel('Depth (cm)')
+    plt.ylabel('Error (%)')
+    plt.title('Weight Estimation Error vs. Depth')
+    plt.savefig(output_dir + '/fig2.png')
+    plt.close()

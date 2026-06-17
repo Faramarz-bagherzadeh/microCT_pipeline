@@ -18,7 +18,7 @@ WEIGHTS_FILE=""
 OUTPUT_DIR=""
 PROJECT_DIR="/albedo/work/projects/p_ICECTai/microCT_pipeline"
 
-python -u "$PROJECT_DIR/3-weight_checking/weight_check.py" \
+python -u "$PROJECT_DIR/3-weight_checking/estimate_weight.py" \
     --tiff_dir "$TIFF_DIR" \
     --weights_file "$WEIGHTS_FILE" \
     --output_dir "$OUTPUT_DIR"
