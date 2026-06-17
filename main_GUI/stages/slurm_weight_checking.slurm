@@ -12,6 +12,8 @@
 module load mesa
 module load conda
 source deactivate
+module avail gcc
+module load GCC/11.3.0
 conda activate faramarz-env
 
 TIFF_DIR=""
