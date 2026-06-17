@@ -154,6 +154,36 @@ def render(config):
     tiff_directory_path = str(selected_tiff_dir)
     output_directory_path = str(selected_output)
 
+    # ===== Check for existing figures in the selected output directory =====
+    if output_directory_path:
+        existing_fig1 = os.path.join(output_directory_path, "fig1.png")
+        existing_fig2 = os.path.join(output_directory_path, "fig2.png")
+        has_fig1 = os.path.exists(existing_fig1)
+        has_fig2 = os.path.exists(existing_fig2)
+
+        if has_fig1 or has_fig2:
+            st.markdown("### Existing Figures in Selected Output Directory")
+            col_fig1, col_fig2 = st.columns(2)
+            with col_fig1:
+                if has_fig1:
+                    img1 = Image.open(existing_fig1)
+                    st.image(img1, caption="Fig 1 (existing)", use_container_width=True)
+                    with open(existing_fig1, "rb") as fp:
+                        st.download_button("Download fig1.png", data=fp, file_name="fig1.png", mime="image/png", key="dl_existing_fig1")
+                else:
+                    st.info("fig1.png not found in this directory")
+
+            with col_fig2:
+                if has_fig2:
+                    img2 = Image.open(existing_fig2)
+                    st.image(img2, caption="Fig 2 (existing)", use_container_width=True)
+                    with open(existing_fig2, "rb") as fp:
+                        st.download_button("Download fig2.png", data=fp, file_name="fig2.png", mime="image/png", key="dl_existing_fig2")
+                else:
+                    st.info("fig2.png not found in this directory")
+        else:
+            st.info("No existing figures found in the selected output directory. Run the weight check to generate them.")
+
     # Reference to the slurm template
     slurm_template = os.path.abspath(os.path.join(os.path.dirname(__file__), "slurm_weight_checking.slurm"))
     if not os.path.exists(slurm_template):
@@ -257,6 +287,8 @@ def render(config):
                 if os.path.exists(fig1_path):
                     img1 = Image.open(fig1_path)
                     st.image(img1, caption="Fig 1", use_container_width=True)
+                    with open(fig1_path, "rb") as fp:
+                        st.download_button("Download fig1.png", data=fp, file_name="fig1.png", mime="image/png", key="dl_job_fig1")
                 else:
                     st.warning(f"fig1.png not found in {output_dir}")
 
@@ -264,6 +296,8 @@ def render(config):
                 if os.path.exists(fig2_path):
                     img2 = Image.open(fig2_path)
                     st.image(img2, caption="Fig 2", use_container_width=True)
+                    with open(fig2_path, "rb") as fp:
+                        st.download_button("Download fig2.png", data=fp, file_name="fig2.png", mime="image/png", key="dl_job_fig2")
                 else:
                     st.warning(f"fig2.png not found in {output_dir}")
 
