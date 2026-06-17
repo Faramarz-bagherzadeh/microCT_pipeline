@@ -11,15 +11,17 @@
 
 module load mesa
 module load conda
-source deactivate
-module avail gcc
-module load GCC/11.3.0
+
 conda activate faramarz-env
+
+# IMPORTANT: force conda runtime libraries first
+export LD_LIBRARY_PATH=$CONDA_PREFIX/lib:$LD_LIBRARY_PATH
 
 TIFF_DIR=""
 WEIGHTS_FILE=""
 OUTPUT_DIR=""
 PROJECT_DIR="/albedo/work/projects/p_ICECTai/microCT_pipeline"
+export LD_LIBRARY_PATH=$CONDA_PREFIX/lib:$LD_LIBRARY_PATH
 
 python -u "$PROJECT_DIR/3-weight_checking/estimate_weight.py" \
     --tiff_dir "$TIFF_DIR" \
