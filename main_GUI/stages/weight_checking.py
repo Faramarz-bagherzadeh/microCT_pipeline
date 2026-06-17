@@ -154,16 +154,18 @@ def render(config):
     tiff_directory_path = str(selected_tiff_dir)
     output_directory_path = str(selected_output)
 
-    # ===== Check for existing figures in the selected output directory =====
+    # ===== Check for existing figures and estimated_weights.xlsx in the selected output directory =====
     if output_directory_path:
         existing_fig1 = os.path.join(output_directory_path, "fig1.png")
         existing_fig2 = os.path.join(output_directory_path, "fig2.png")
+        existing_weights = os.path.join(output_directory_path, "estimated_weights.xlsx")
         has_fig1 = os.path.exists(existing_fig1)
         has_fig2 = os.path.exists(existing_fig2)
+        has_weights = os.path.exists(existing_weights)
 
-        if has_fig1 or has_fig2:
-            st.markdown("### Existing Figures in Selected Output Directory")
-            col_fig1, col_fig2 = st.columns(2)
+        if has_fig1 or has_fig2 or has_weights:
+            st.markdown("### Existing Output Files in Selected Output Directory")
+            col_fig1, col_fig2, col_weights = st.columns(3)
             with col_fig1:
                 if has_fig1:
                     img1 = Image.open(existing_fig1)
@@ -171,7 +173,7 @@ def render(config):
                     with open(existing_fig1, "rb") as fp:
                         st.download_button("Download fig1.png", data=fp, file_name="fig1.png", mime="image/png", key="dl_existing_fig1")
                 else:
-                    st.info("fig1.png not found in this directory")
+                    st.info("fig1.png not found")
 
             with col_fig2:
                 if has_fig2:
@@ -180,9 +182,23 @@ def render(config):
                     with open(existing_fig2, "rb") as fp:
                         st.download_button("Download fig2.png", data=fp, file_name="fig2.png", mime="image/png", key="dl_existing_fig2")
                 else:
-                    st.info("fig2.png not found in this directory")
+                    st.info("fig2.png not found")
+
+            with col_weights:
+                if has_weights:
+                    st.markdown("**estimated_weights.xlsx**")
+                    with open(existing_weights, "rb") as fp:
+                        st.download_button(
+                            "Download estimated_weights.xlsx",
+                            data=fp,
+                            file_name="estimated_weights.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            key="dl_existing_weights",
+                        )
+                else:
+                    st.info("estimated_weights.xlsx not found")
         else:
-            st.info("No existing figures found in the selected output directory. Run the weight check to generate them.")
+            st.info("No existing output files found in the selected output directory. Run the weight check to generate them.")
 
     # Reference to the slurm template
     slurm_template = os.path.abspath(os.path.join(os.path.dirname(__file__), "slurm_weight_checking.slurm"))
@@ -280,8 +296,11 @@ def render(config):
                 st.session_state["weight_check_figures_shown"] = True
                 st.rerun()
 
-        # --- Phase 3: Show the figures (auto-displayed) ---
+        # --- Phase 3: Show the figures and estimated_weights.xlsx (auto-displayed) ---
         if st.session_state.get("weight_check_figures_shown", False):
+            weights_xlsx_path = os.path.join(output_dir, "estimated_weights.xlsx")
+
+            # Display figures
             col1, col2 = st.columns(2)
             with col1:
                 if os.path.exists(fig1_path):
@@ -300,6 +319,20 @@ def render(config):
                         st.download_button("Download fig2.png", data=fp, file_name="fig2.png", mime="image/png", key="dl_job_fig2")
                 else:
                     st.warning(f"fig2.png not found in {output_dir}")
+
+            # Download button for estimated_weights.xlsx
+            if os.path.exists(weights_xlsx_path):
+                st.markdown("### Estimated Weights File")
+                with open(weights_xlsx_path, "rb") as fp:
+                    st.download_button(
+                        "Download estimated_weights.xlsx",
+                        data=fp,
+                        file_name="estimated_weights.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        key="dl_job_weights",
+                    )
+            else:
+                st.info("estimated_weights.xlsx not yet available in the output directory.")
 
             # Allow the user to dismiss / reset
             if st.button("Clear & Submit New Job", width='stretch'):

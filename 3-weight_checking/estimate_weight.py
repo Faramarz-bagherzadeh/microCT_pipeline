@@ -98,7 +98,7 @@ if __name__ == "__main__":
     df['actual_weight'] = actual_weights
     df['error'] = df['estimated_weight'] - df['actual_weight']
     df['error_percent'] = df['error'] / df['actual_weight'] * 100
-    df.to_excel(output_dir + '/estimated_weights.xlsx', index=False)
+    df.to_excel(output_dir + '/t', index=False)
     print ('Saved estimated weights to: ', output_dir + '/estimated_weights.xlsx')
 
     plt.figure()
