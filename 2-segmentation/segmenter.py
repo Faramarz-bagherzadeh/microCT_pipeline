@@ -64,7 +64,7 @@ def binary_seg_kMeans(img):
     constant = 0
 
     binary = np.zeros_like(img)
-    mask = get_ice_part(img, skip=2,thresh1=15,kernel_size=200)
+    mask = get_ice_part(img, skip=200,thresh1=15,kernel_size=200)
     pixels = img[mask==1].reshape(-1, 1)
 
     if len(pixels) < 1e3:
@@ -199,7 +199,7 @@ if __name__ == "__main__":
     print("Output directory:", output_dir)
 
 
-    batch = 50
+    batch = 5000
     print ('batch size = ', batch)
 
     t1 = time.time()
