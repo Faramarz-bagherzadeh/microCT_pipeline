@@ -167,7 +167,7 @@ def render(config):
             with col_fig1:
                 if has_fig1:
                     img1 = Image.open(existing_fig1)
-                    st.image(img1, caption="Fig 1 (existing)", use_container_width=True)
+                    st.image(img1, caption="Fig 1 (existing)", width='stretch')
                     with open(existing_fig1, "rb") as fp:
                         st.download_button("Download fig1.png", data=fp, file_name="fig1.png", mime="image/png", key="dl_existing_fig1")
                 else:
@@ -176,7 +176,7 @@ def render(config):
             with col_fig2:
                 if has_fig2:
                     img2 = Image.open(existing_fig2)
-                    st.image(img2, caption="Fig 2 (existing)", use_container_width=True)
+                    st.image(img2, caption="Fig 2 (existing)", width='stretch')
                     with open(existing_fig2, "rb") as fp:
                         st.download_button("Download fig2.png", data=fp, file_name="fig2.png", mime="image/png", key="dl_existing_fig2")
                 else:
@@ -191,8 +191,8 @@ def render(config):
         return
 
     col_run, col_stop = st.columns(2)
-    run_pressed = col_run.button("Run Weight Check", use_container_width=True)
-    stop_pressed = col_stop.button("Stop", use_container_width=True)
+    run_pressed = col_run.button("Run Weight Check", width='stretch')
+    stop_pressed = col_stop.button("Stop", width='stretch')
 
     if run_pressed:
         # Write the slurm script with TIFF_DIR, WEIGHTS_FILE and OUTPUT_DIR set
@@ -257,7 +257,7 @@ def render(config):
                 st.rerun()
             else:
                 st.write("Waiting for the SLURM job to finish. Check again shortly.")
-                if st.button("Check Job Status", use_container_width=True):
+                if st.button("Check Job Status", width='stretch'):
                     st.rerun()
 
         # --- Phase 2: Job finished, waiting 2 minutes post-completion ---
@@ -271,7 +271,7 @@ def render(config):
                     f"Job {job_id} has finished. "
                     f"Waiting {int(remaining)} more seconds before displaying figures..."
                 )
-                if st.button("Show Figures Now (skip wait)", use_container_width=True):
+                if st.button("Show Figures Now (skip wait)", width='stretch'):
                     # Skip the remainder of the 2-minute delay
                     st.session_state["weight_check_figures_shown"] = True
                     st.rerun()
@@ -286,7 +286,7 @@ def render(config):
             with col1:
                 if os.path.exists(fig1_path):
                     img1 = Image.open(fig1_path)
-                    st.image(img1, caption="Fig 1", use_container_width=True)
+                    st.image(img1, caption="Fig 1", width='stretch')
                     with open(fig1_path, "rb") as fp:
                         st.download_button("Download fig1.png", data=fp, file_name="fig1.png", mime="image/png", key="dl_job_fig1")
                 else:
@@ -295,14 +295,14 @@ def render(config):
             with col2:
                 if os.path.exists(fig2_path):
                     img2 = Image.open(fig2_path)
-                    st.image(img2, caption="Fig 2", use_container_width=True)
+                    st.image(img2, caption="Fig 2", width='stretch')
                     with open(fig2_path, "rb") as fp:
                         st.download_button("Download fig2.png", data=fp, file_name="fig2.png", mime="image/png", key="dl_job_fig2")
                 else:
                     st.warning(f"fig2.png not found in {output_dir}")
 
             # Allow the user to dismiss / reset
-            if st.button("Clear & Submit New Job", use_container_width=True):
+            if st.button("Clear & Submit New Job", width='stretch'):
                 for key in ["weight_check_job_id", "weight_check_submit_time",
                             "weight_check_output_dir", "weight_check_job_completed_time",
                             "weight_check_figures_shown"]:
