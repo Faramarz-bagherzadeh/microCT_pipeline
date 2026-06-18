@@ -103,6 +103,10 @@ if __name__ == "__main__":
 
     plt.figure()
     plt.scatter(df['actual_weight'], df['estimated_weight'])
+    # Add 45-degree dashed line (y = x) for perfect agreement reference
+    min_val = min(df['actual_weight'].min(), df['estimated_weight'].min())
+    max_val = max(df['actual_weight'].max(), df['estimated_weight'].max())
+    plt.plot([min_val, max_val], [min_val, max_val], 'k--')
     plt.xlabel('Actual Weight (g)')
     plt.ylabel('Estimated Weight (g)')
     plt.title('Weight Estimation Comparison')
