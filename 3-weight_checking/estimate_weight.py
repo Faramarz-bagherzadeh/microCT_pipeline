@@ -62,7 +62,7 @@ if __name__ == "__main__":
     print("Weights file:", weights_file)
     print("Output directory:", output_dir)
     print("TIFF directory:", tiff_dir)
-    pixel_length=0.01198 #cm 
+    pixel_length=0.0120 #cm 
     density = 0.917 #g/cm3
     print ('pixel_length = ', pixel_length, 'cm')
     print ('density = ', density, 'g/cm3')
@@ -98,7 +98,7 @@ if __name__ == "__main__":
     df['actual_weight'] = actual_weights
     df['error'] = df['estimated_weight'] - df['actual_weight']
     df['error_percent'] = df['error'] / df['actual_weight'] * 100
-    df.to_excel(output_dir + '/t', index=False)
+    df.to_excel(output_dir + '/estimated_weights.xlsx', index=False)
     print ('Saved estimated weights to: ', output_dir + '/estimated_weights.xlsx')
 
     plt.figure()
