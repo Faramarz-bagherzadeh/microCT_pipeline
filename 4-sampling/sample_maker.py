@@ -74,7 +74,7 @@ def sample_maker(data, depth, step, sample_size, output_dir, name):
         sample = data[starting_layer:ending_layer] # grabing the sample along the depth dimension
         ice_mask = get_ice_part(sample, depth)  # getting the ice mask for the sample
         sample_volume = set_sample_volume(sample,ice_mask)  # setting the sample volume (croping x and y) based on the ice mask
-        tifffile.imwrite(output_dir+'/'+name+ '_' + str(depth + d_step*i) + '_', '.tif', sample_volume.astype('uint8'))
+        tifffile.imwrite(output_dir+'/'+name+ '_' + str(depth + d_step*i) + '_'+ '.tif', sample_volume.astype('uint8'))
     
     return None
 
