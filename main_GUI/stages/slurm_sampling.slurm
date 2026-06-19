@@ -6,24 +6,25 @@
 #SBATCH --qos=48h
 #SBATCH --cpus-per-task 128
 #SBATCH --time=47:00:00
-#SBATCH --job-name=WeightChecking
-#SBATCH --output=logs/weightChecking_log.%j.out
+#SBATCH --job-name=Sampling
+#SBATCH --output=logs/sampling_log.%j.out
 
 module load mesa
 module load conda
 
 conda activate faramarz-env
 
-# IMPORTANT: force conda runtime libraries first
-export LD_LIBRARY_PATH=$CONDA_PREFIX/lib:$LD_LIBRARY_PATH
 
 TIFF_DIR=""
 WEIGHTS_FILE=""
 OUTPUT_DIR=""
+SAMPLE_SIZE=""
+OVERLAP_SIZE=""
 PROJECT_DIR="/albedo/work/projects/p_ICECTai/microCT_pipeline"
-export LD_LIBRARY_PATH=$CONDA_PREFIX/lib:$LD_LIBRARY_PATH
 
-python -u "$PROJECT_DIR/3-weight_checking/estimate_weight.py" \
+python -u "$PROJECT_DIR/3-sampling/sample_maker.py" \
     --tiff_dir "$TIFF_DIR" \
     --weights_file "$WEIGHTS_FILE" \
-    --output_dir "$OUTPUT_DIR"
+    --output_dir "$OUTPUT_DIR"\
+    --sample_size "$SAMPLE_SIZE"\
+    --overlap_size "$OVERLAP_SIZE"
