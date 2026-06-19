@@ -22,7 +22,7 @@ SAMPLE_SIZE=""
 OVERLAP_SIZE=""
 PROJECT_DIR="/albedo/work/projects/p_ICECTai/microCT_pipeline"
 
-python -u "$PROJECT_DIR/3-sampling/sample_maker.py" \
+python -u "$PROJECT_DIR/4-sampling/sample_maker.py" \
     --tiff_dir "$TIFF_DIR" \
     --weights_file "$WEIGHTS_FILE" \
     --output_dir "$OUTPUT_DIR"\
