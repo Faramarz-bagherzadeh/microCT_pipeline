@@ -13,7 +13,8 @@ module load mesa
 module load conda
 
 conda activate faramarz-env
-
+# IMPORTANT: force conda runtime libraries first
+export LD_LIBRARY_PATH=$CONDA_PREFIX/lib:$LD_LIBRARY_PATH
 
 TIFF_DIR=""
 WEIGHTS_FILE=""
