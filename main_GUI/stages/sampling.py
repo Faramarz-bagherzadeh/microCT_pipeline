@@ -154,8 +154,8 @@ def render(config):
     output_directory_path = str(selected_output)
 
     st.markdown("### Sampling Parameters")
-    sample_size = st.number_input("Sample size (number of layers)", min_value=1, value=100, step=1, key="sample_size_input")
-    overlap_size = st.number_input("Overlap size (number of layers)", min_value=0, value=10, step=1, key="overlap_size_input")
+    sample_size = st.number_input("Sample size (number of layers)", min_value=1, value=400, step=1, key="sample_size_input")
+    overlap_size = st.number_input("Overlap size (number of layers)", min_value=0, value=200, step=1, key="overlap_size_input")
 
     # Reference to the slurm template
     slurm_template = os.path.abspath(os.path.join(os.path.dirname(__file__), "slurm_sampling.slurm"))

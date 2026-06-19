@@ -115,7 +115,7 @@ if __name__ == "__main__":
 
     paths = glob.glob(tiff_dir + '/*.tif')
     print ('number of files =' ,len(paths))
-    original_weight_df = pd.read_csv(weights_file)
+    original_weight_df = pd.read_excel(weights_file)
 
     for f in paths:
         data = tifffile.imread(f)
