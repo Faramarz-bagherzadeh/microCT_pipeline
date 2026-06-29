@@ -263,51 +263,29 @@ def process_single_file(filepath, resolution, pixel_density, output_dir):
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description='Extract microstructural parameters from binary .tif images.'
-    )
-    parser.add_argument(
-        '--input_dir', type=str, required=True,
-        help='Directory containing binary .tif files'
-    )
-    parser.add_argument(
-        '--output_dir', type=str, default=None,
-        help='Directory to save JSON results (default: same as input_dir)'
-    )
-    parser.add_argument(
-        '--resolution', type=float, required=True,
-        help='Voxel resolution in meters (e.g., 1e-5 for 10 microns)'
-    )
-    parser.add_argument(
-        '--pixel_density', type=float, default=0.917,
-        help='Density of solid material in g/cm³ (default: 0.917 for ice)'
-    )
+
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument("--output_dir", type=str, required=True)
+    parser.add_argument("--tiff_dir", type=str, required=True)
+    parser.add_argument("--resolution", type=str, required=True)
+
     args = parser.parse_args()
 
-    # Validate input directory
-    input_dir = args.input_dir
-    if not os.path.isdir(input_dir):
-        print(f"ERROR: Input directory does not exist: {input_dir}")
-        sys.exit(1)
+    output_dir = args.output_dir
+    input_dir = args.tiff_dir
+    resolution = float(args.resolution)
 
-    # Set output directory
-    output_dir = args.output_dir if args.output_dir else input_dir
-    os.makedirs(output_dir, exist_ok=True)
 
-    # Find all .tif files directly
-    tif_pattern = os.path.join(input_dir, '*.tif')
-    tif_files = sorted(glob.glob(tif_pattern))
+    print("Output directory:", output_dir)
+    print("TIFF directory:", input_dir)
+    print("Resolution:", resolution)
 
-    if not tif_files:
-        print(f"ERROR: No .tif files found in {input_dir}")
-        sys.exit(1)
 
-    print(f"Found {len(tif_files)} .tif file(s) to process")
-    print(f"Input directory: {input_dir}")
-    print(f"Output directory: {output_dir}")
-    print(f"Resolution: {args.resolution} m")
-    print(f"Pixel density: {args.pixel_density} g/cm³")
-    print()
+    tif_files = glob.glob(input_dir + '/*.tif')
+    print ('number of files =' ,len(tif_files))
+
+
 
     # Process each file
     successful = 0
@@ -344,3 +322,5 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+    
