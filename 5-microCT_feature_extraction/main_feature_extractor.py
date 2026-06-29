@@ -1,14 +1,12 @@
 """
 Main Feature Extractor for microCT binary images.
 
-This script reads binary .tif files from an input directory, extracts
-microstructural parameters using functions from params_basic.py and
-params_transport.py, and saves the results as a JSON file per image.
+This script reads a single binary .tif file, extracts microstructural
+parameters using functions from params_basic.py and
+params_transport.py, and saves the results as a JSON file.
 
 Usage:
-    python main_feature_extractor.py --input_dir <path_to_tifs> --resolution <voxel_size_m>
-    python main_feature_extractor.py --input_dir ./data --resolution 1e-5 --pixel_density 0.917
-    python main_feature_extractor.py --input_dir ./data --resolution 1e-5 --output_dir ./results
+    python main_feature_extractor.py --tiff_file <path_to_tif> --output_dir <output> --resolution <voxel_size_m>
 """
 
 import os
@@ -267,60 +265,23 @@ def main():
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--output_dir", type=str, required=True)
-    parser.add_argument("--tiff_dir", type=str, required=True)
+    parser.add_argument("--tiff_file", type=str, required=True,
+                        help="Path to a single .tif file to process")
     parser.add_argument("--resolution", type=str, required=True)
 
     args = parser.parse_args()
 
     output_dir = args.output_dir
-    input_dir = args.tiff_dir
     resolution = float(args.resolution)
+    filepath = args.tiff_file
 
+    print(f"Output directory: {output_dir}")
+    print(f"TIFF file: {filepath}")
+    print(f"Resolution: {resolution}")
 
-    print("Output directory:", output_dir)
-    print("TIFF directory:", input_dir)
-    print("Resolution:", resolution)
-
-
-    tif_files = glob.glob(input_dir + '/*.tif')
-    print ('number of files =' ,len(tif_files))
-
-
-
-    # Process each file
-    successful = 0
-    failed = 0
-    failed_files = []
-
-    for i, filepath in enumerate(tif_files, 1):
-        print(f"\n[{i}/{len(tif_files)}]")
-        result = process_single_file(
-            filepath, args.resolution, args.pixel_density, output_dir
-        )
-
-        if result is not None:
-            successful += 1
-        else:
-            failed += 1
-            failed_files.append(os.path.basename(filepath))
-
-    # Print summary
-    print(f"\n{'='*60}")
-    print(f"PROCESSING COMPLETE")
-    print(f"{'='*60}")
-    print(f"  Total files: {len(tif_files)}")
-    print(f"  Successful:  {successful}")
-    print(f"  Failed:      {failed}")
-
-    if failed_files:
-        print(f"\n  Failed files:")
-        for fname in failed_files:
-            print(f"    - {fname}")
-
-    print(f"\nJSON results saved in: {output_dir}")
+    process_single_file(filepath=filepath, resolution=resolution,
+                        pixel_density=0.917, output_dir=output_dir)
 
 
 if __name__ == '__main__':
     main()
-
-    
