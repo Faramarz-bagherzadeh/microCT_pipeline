@@ -10,10 +10,8 @@ Usage:
 """
 
 import os
-import sys
 import json
 import argparse
-import glob
 import numpy as np
 from datetime import datetime
 import tifffile
@@ -205,6 +203,7 @@ def process_single_file(filepath, resolution, pixel_density, output_dir):
     # Initialize results dictionary with metadata
     results = {
         'filename': filename,
+        'depth' : filename.split('_')[-2],
         'filepath': filepath,
         'image_shape': list(binary_img.shape),
         'total_voxels': int(binary_img.size),

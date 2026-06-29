@@ -109,7 +109,7 @@ def skeleton_metrics(img, resolution):
 
 
 def calculate_permeability(img, resolution,p1,p2):
-    filled =ps.filters.fill_blind_pores(img,surface=False)
+    filled =ps.filters.fill_closed_pores(img,surface=False)
     thickness = 2
     if p1 == 'zmin':
         filled [:, :, :thickness] = True  # Front face
@@ -166,7 +166,7 @@ def calculate_permeability(img, resolution,p1,p2):
 
 
 def calculate_tortuosity(img, resolution,p1,p2):
-    filled =ps.filters.fill_blind_pores(img,surface=False)
+    filled =ps.filters.fill_closed_pores(img,surface=False)
     thickness = 2
     if p1 == 'zmin':
         filled [:, :, :thickness] = True  # Front face
