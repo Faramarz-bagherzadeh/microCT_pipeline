@@ -4,11 +4,11 @@
 #SBATCH --nodes=1
 #SBATCH --tasks-per-node 1
 #SBATCH --qos=48h
-#SBATCH --cpus-per-task 16
+#SBATCH --cpus-per-task 8
 #SBATCH --time=47:00:00
 #SBATCH --job-name=feature_extraction
 #SBATCH --output=logs/feature_extraction_log_%A_%a.out
-#SBATCH --array=0-%MAX_JOBS%%10
+#SBATCH --array=0-%MAX_JOBS%%80
 
 module load mesa
 module load conda

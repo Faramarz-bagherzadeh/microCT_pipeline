@@ -201,7 +201,7 @@ def classify_pores(binary_image):
                 # Group 3: Completely isolated
                 group_3_sum += region.area
 
-    return round(100*group_1_sum/volume ,3), round(100*group_2_sum/volume ,3) , round(100*group_3_sum/volume ,3)
+    return round(group_1_sum/volume ,3), round(group_2_sum/volume ,3) , round(group_3_sum/volume ,3)
 
 
     
