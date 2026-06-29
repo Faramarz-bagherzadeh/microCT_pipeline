@@ -137,7 +137,7 @@ def render(config):
     raw_directory_path = str(selected_raw)
     feature_output_dir = str(selected_output)
 
-    resolution = st.text_input("Resolution (voxel size in meter, e.g. 120e-6):", value="0.045")
+    resolution = st.text_input("Resolution (voxel size in meter, e.g. 120e-6):", value="120e-6")
 
     slurm_template = os.path.abspath(os.path.join(os.path.dirname(__file__), "slurm_feature_extraction.slurm"))
     if not os.path.exists(slurm_template):
