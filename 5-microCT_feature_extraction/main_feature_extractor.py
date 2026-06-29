@@ -129,7 +129,7 @@ def extract_transport_params(binary_img, resolution):
         skel = skeleton_metrics(binary_img, resolution)
         for key, value in skel.items():
             if isinstance(value, (np.floating, float)):
-                results[key] = round(float(value), 3)
+                results[key] = round(float(value), 6)
             elif isinstance(value, (np.integer, int)):
                 results[key] = int(value)
             else:
