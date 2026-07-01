@@ -144,6 +144,11 @@ def extract_transport_params(binary_img, resolution):
                      'std_coordination_number']:
             results[key] = None
 
+    # Invert the binary image for permeability and tortuosity calculations.
+    # Original: solid=True, void=False
+    # Inverted: void=True, solid=False (needed for transport in void space)
+    void_img = ~binary_img
+
     # Permeability and tortuosity for all three directions
     directions = [
         ('zmin', 'zmax', 'z'),
@@ -154,7 +159,7 @@ def extract_transport_params(binary_img, resolution):
     for p1, p2, label in directions:
         # Permeability
         try:
-            k = calculate_permeability(binary_img, resolution, p1, p2)
+            k = calculate_permeability(void_img, resolution, p1, p2)
             results[f'permeability_{label}_m2'] = round(float(k), 10)
         except Exception as e:
             print(f"  Warning: calculate_permeability ({label}) failed: {e}")
@@ -162,7 +167,7 @@ def extract_transport_params(binary_img, resolution):
 
         # Tortuosity
         try:
-            tau = calculate_tortuosity(binary_img, resolution, p1, p2)
+            tau = calculate_tortuosity(void_img, resolution, p1, p2)
             results[f'tortuosity_{label}'] = round(float(tau), 3)
         except Exception as e:
             print(f"  Warning: calculate_tortuosity ({label}) failed: {e}")
