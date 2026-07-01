@@ -37,6 +37,10 @@ def main():
     # Convert to DataFrame (each JSON dict becomes one row)
     df = pd.DataFrame(all_data)
 
+    # Convert the 'depth' column from string to float if it exists
+    if "depth" in df.columns:
+        df["depth"] = pd.to_numeric(df["depth"], errors="coerce")
+
     # Save to Excel in the same directory
     output_path = os.path.join(jsons_dir, "merged_features.xlsx")
     df.to_excel(output_path, index=False)
