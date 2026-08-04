@@ -4,7 +4,7 @@ def get_ice_part(image,skip,thresh1, kernel_size):
     final_mask = np.zeros_like(image)
     for i in range(0,image.shape[0]-skip,skip):
         img = image[i]
-        if img.sum()<4e6: # passing to next image if it is mostly black
+        if img.sum()<5e3: # passing to next image if it is mostly black
             continue
 
         # Apply a binary threshold to create a binary image
@@ -37,7 +37,7 @@ def contrast_stretching(input_image):
     stretched_image = skimage.exposure.rescale_intensity(input_image, in_range=(p2, p98))
     return stretched_image.astype('uint8')
 
-
+'''
 def GMM_seg(img):
     from sklearn.mixture import GaussianMixture as GMM
     binary_img = np.zeros_like(img)
@@ -57,14 +57,14 @@ def GMM_seg(img):
     binary_img[gmm_labels == ice_class_index] = 1
     return binary_img
 
-
+'''
 def binary_seg_kMeans(img):
     from sklearn.cluster import KMeans
     print ('K-Mean started !')
     constant = 0
 
     binary = np.zeros_like(img)
-    mask = get_ice_part(img, skip=200,thresh1=15,kernel_size=200)
+    mask = get_ice_part(img, skip=200,thresh1=15,kernel_size=100)
     pixels = img[mask==1].reshape(-1, 1)
 
     if len(pixels) < 1e3:
@@ -80,7 +80,7 @@ def binary_seg_kMeans(img):
     binary[img > thresh] = 1
 
     return binary
-
+'''
 def Otsu(img):
     import skimage.filters as skf
     #binary = np.zeros_like(img)
@@ -93,7 +93,7 @@ def Otsu(img):
     print('Otsu Threshold = ',thresh)
     #binary[img > thresh] = 1
     return thresh
-
+'''
 def segmentation_function(image, batch):
     import numpy as np
     segmented_img = np.zeros_like(image)
@@ -114,7 +114,7 @@ def segmentation_function(image, batch):
             segmented_img[s:s+batch,:,:]= binary
 
     return segmented_img.astype('uint8')
-
+'''
 
 def segmentation_by_weight_3(image, name):
     """Segmentation based on adaptive core weights (optimized binary search)."""
@@ -170,7 +170,7 @@ def segmentation_by_weight_3(image, name):
         print(f"Error: {best_error:.2f} g, Real Weight: {total_weight:.2f} g, Estimated Weight: {image_weight:.2f} g")
 
     return binary , errors
-
+'''
 if __name__ == "__main__":
     
 
