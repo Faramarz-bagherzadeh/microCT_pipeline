@@ -119,7 +119,6 @@ def predict(model,data,patch_size, batch_size=128):
 
         # Upsample each patch by 2×
         input_ = np.stack([zoom(p, (2, 2, 2), order=1)for p in input_]) 
-        print ('upsampling done! ', input_.shape)
         
         input_ = torch.from_numpy(input_).unsqueeze(1).float() / 255
         input_ = input_.to(device)
@@ -131,7 +130,7 @@ def predict(model,data,patch_size, batch_size=128):
         output_ = output_[:,0,:,:,:]*255 # back to real scale
         # Downsample back
         output_ = np.stack([zoom(p, (0.5, 0.5, 0.5), order=1)for p in output_])
-        print ('downsampling done! ', output_.shape)
+
         output_ = np.clip(output_, 0, 255).astype(np.uint8)
         prediction[idx] = output_
 
