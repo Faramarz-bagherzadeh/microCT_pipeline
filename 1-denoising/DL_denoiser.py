@@ -1,4 +1,7 @@
 
+from xml.parsers.expat import model
+
+
 def contrast_stretching_full(input_image):
                 # Contrast stretching
                         # Dropping extreems (artifacts)
@@ -96,26 +99,41 @@ def load_checkpoint(checkpoint, model):
 
 
 def predict(model,data,patch_size, batch_size=128):
+    model.eval()
     prediction = np.zeros((data.shape[0],patch_size//2,patch_size//2,patch_size//2), dtype='uint8')
-    torch.set_num_threads(120)
+    
     #drop zero patches to save time
     non_zero_indices = np.where(np.sum(data, axis=(1,2,3)) != 0)[0]
 
-    loop_len = len (non_zero_indices)//batch_size
-    for i in range(0,loop_len+1):
+    if len(non_zero_indices) == 0:
+        print ("No non-zero patches found. Returning empty prediction.!!!!")
+        return None
+    loop_len = int(np.ceil(len(non_zero_indices)/batch_size))
+
+    for i in range(loop_len):
+        start = i * batch_size
+        end = min((i+1)*batch_size, len(non_zero_indices))
+        idx = non_zero_indices[start:end]
+
+        input_ = data[idx].astype(np.float32)
+
+        # Upsample each patch by 2×
+        input_ = np.stack([zoom(p, (2, 2, 2), order=1)for p in input_]) 
+        print ('upsampling done! ', input_.shape)
         
-        if i+1 > loop_len:
-            r = [i*batch_size, None] # make sure we read all patches
-        else:
-            r = [i*batch_size, (i+1)*batch_size]
-                
-        input_= torch.from_numpy(data[non_zero_indices[r[0]:r[1]]]).unsqueeze(1).float()
-        input_ = input_/255 #normalization
+        input_ = torch.from_numpy(input_).unsqueeze(1).float() / 255
         input_ = input_.to(device)
-        output_= model(input_).cpu().detach().numpy()
+
+        with torch.inference_mode(): # no track of gradients save memory and speed up
+            output_ = model(input_)
+
+        output_ = output_.cpu().detach().numpy()
         output_ = output_[:,0,:,:,:]*255 # back to real scale
-        output_ = output_.astype('uint8')
-        prediction[non_zero_indices[r[0]:r[1]]]=output_
+        # Downsample back
+        output_ = np.stack([zoom(p, (0.5, 0.5, 0.5), order=1)for p in output_])
+        print ('downsampling done! ', output_.shape)
+        output_ = np.clip(output_, 0, 255).astype(np.uint8)
+        prediction[idx] = output_
 
     return prediction
 
@@ -195,7 +213,9 @@ if __name__ == "__main__":
     import cv2 
     from rek_read import read_rek_file
     import argparse
+    from scipy.ndimage import zoom
 
+    torch.set_num_threads(120)
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--input_dir", type=str, required=True)
