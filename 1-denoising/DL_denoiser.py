@@ -263,7 +263,7 @@ if __name__ == "__main__":
     print ('*********************************************')
     print ('file name = ', name)
 
-    data = read_rek_file(input_dir)
+    data , resolution = read_rek_file(input_dir)
     print ('original data shape = ', data.shape)
     data = contrast_stretching_full(data)
     print ('contrast stretching done!')
@@ -295,7 +295,7 @@ if __name__ == "__main__":
     print ('final output shape = ', output.shape)
     print ('saving image...')
 
-    tifffile.imwrite(output_dir + '/' + name + '.tif', output,photometric='minisblack',metadata=metadata,imagej=True)
+    tifffile.imwrite(output_dir + '/' + name + '_' + str(resolution) + '.tif', output,photometric='minisblack',metadata=metadata,imagej=True)
         
     
     t2= time.time()

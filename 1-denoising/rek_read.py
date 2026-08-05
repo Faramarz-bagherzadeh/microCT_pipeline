@@ -26,7 +26,7 @@ def read_rek_file(path):
     img = np.fromfile(pfile, dtype=np.uint8, count=imagedepth * imagehight * imagewidth)
     img = img.reshape((int(imagedepth),int(imagehight),int(imagewidth)))
     
-    return img
+    return img, round(resolution)
 
 
 
