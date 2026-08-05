@@ -8,7 +8,7 @@
 #SBATCH --cpus-per-task 128
 #SBATCH --time=47:00:00
 #SBATCH --job-name=Denoising
-#SBATCH --output=logs/Denoising_log.%j.out
+#SBATCH --output=/albedo/work/projects/p_ICECTai/microCT_pipeline/logs/Denoising_log_%A_%a.out
 
 
 module load mesa

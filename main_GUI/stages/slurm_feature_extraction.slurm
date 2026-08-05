@@ -7,7 +7,7 @@
 #SBATCH --cpus-per-task 8
 #SBATCH --time=47:00:00
 #SBATCH --job-name=feature_extraction
-#SBATCH --output=logs/feature_extraction_log_%A_%a.out
+#SBATCH --output=/albedo/work/projects/p_ICECTai/microCT_pipeline/logs/feature_extraction_log_%A_%a.out
 #SBATCH --array=0-%MAX_JOBS%%80
 
 module load mesa

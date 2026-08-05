@@ -7,7 +7,7 @@
 #SBATCH --cpus-per-task 128
 #SBATCH --time=47:00:00
 #SBATCH --job-name=Sampling
-#SBATCH --output=logs/sampling_log.%j.out
+#SBATCH --output=/albedo/work/projects/p_ICECTai/microCT_pipeline/logs/sampling_log.%j.out
 
 module load mesa
 module load conda

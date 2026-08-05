@@ -7,7 +7,7 @@
 #SBATCH --cpus-per-task 128
 #SBATCH --time=47:00:00
 #SBATCH --job-name=WeightChecking
-#SBATCH --output=logs/weightChecking_log.%j.out
+#SBATCH --output=/albedo/work/projects/p_ICECTai/microCT_pipeline/logs/weightChecking_log.%j.out
 
 module load mesa
 module load conda
