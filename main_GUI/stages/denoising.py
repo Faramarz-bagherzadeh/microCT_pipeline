@@ -122,8 +122,24 @@ def render(config):
 
     col_submit, col_stop = st.columns(2)
     submit_pressed = col_submit.button("Submit jobs", use_container_width=True)
-    # stop button kept for compatibility but does nothing in fire-and-forget mode
     stop_pressed = col_stop.button("Stop", use_container_width=True)
+
+    if stop_pressed:
+        jobid = st.session_state.get("denoising_job_id")
+        if not jobid:
+            st.warning("No denoising job has been submitted yet.")
+        else:
+            try:
+                completed = subprocess.run(["scancel", str(jobid)], capture_output=True, text=True)
+            except Exception as e:
+                st.error(f"Failed to run scancel: {e}")
+            else:
+                out = completed.stdout + completed.stderr
+                if completed.returncode == 0:
+                    st.success(f"Cancelled job {jobid}")
+                    st.session_state.pop("denoising_job_id", None)
+                else:
+                    st.error(f"Failed to cancel job {jobid}:\n{out}")
 
     if submit_pressed:
         # collect selected files
@@ -169,6 +185,7 @@ def render(config):
             m = re.search(r"Submitted batch job (\d+)", out)
             if m:
                 jobid = m.group(1)
+                st.session_state["denoising_job_id"] = jobid
                 st.success(f"Submitted array job {jobid} for {len(files)} files (concurrency capped at 3)")
             else:
                 st.error(f"Could not determine job id from sbatch output:\n{out}")
