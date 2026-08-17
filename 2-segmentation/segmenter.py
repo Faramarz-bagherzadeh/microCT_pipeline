@@ -104,7 +104,7 @@ def segmentation_function(image, batch):
         else:
             img = image[s:s+batch,:,:]
 
-        #img = contrast_stretching(img)
+        img = contrast_stretching(img)
         binary = binary_seg_kMeans(img)
         #binary = GMM_seg(img)
         #binary = Otsu(img)
