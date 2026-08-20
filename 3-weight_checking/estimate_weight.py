@@ -80,6 +80,7 @@ if __name__ == "__main__":
         data = tifffile.imread(f)
         name = f.split('/')[-1].split('.')[0]
         pixel_length= float(name.split('_')[-1])/10000 #0.0120 #cm
+        name = name [:-4]  # Remove the last 4 characters (resolution)
         print ('resolution (pixel_length) = ', pixel_length, 'cm')
         print ('*********************************************')
         print ('processing file: ', name)

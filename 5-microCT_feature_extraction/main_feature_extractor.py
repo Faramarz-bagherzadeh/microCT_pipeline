@@ -70,7 +70,7 @@ def extract_basic_params(binary_img, resolution, pixel_density=0.917):
         dict: Dictionary of basic parameters
     """
     results = {}
-
+    void_img = ~binary_img # Invert the binary image for void space analysis
     # Porosity, density, sample volume
     porosity, density, sample_volume = por_den_vol(binary_img, resolution, pixel_density)
     results['porosity'] = porosity
@@ -85,12 +85,20 @@ def extract_basic_params(binary_img, resolution, pixel_density=0.917):
     specific_area = specific_surface_area(binary_img, resolution)
     results['specific_surface_area_m2_per_m3'] = round(specific_area, 3)
 
-    # Mean intercept length
+    # Mean intercept length in ice
     mil_x, mil_y, mil_z = mean_intercept_length(binary_img, resolution)
-    results['mil_x_mm'] = mil_x
-    results['mil_y_mm'] = mil_y
-    results['mil_z_mm'] = mil_z
-    results['mil_mean_mm'] = round(np.mean([mil_x, mil_y, mil_z]), 3)
+    results['mil_x_mm_ice'] = mil_x
+    results['mil_y_mm_ice'] = mil_y
+    results['mil_z_mm_ice'] = mil_z
+    results['mil_mean_mm_ice'] = round(np.mean([mil_x, mil_y, mil_z]), 3)
+
+    # Mean intercept length in air (void)
+    mil_x, mil_y, mil_z = mean_intercept_length(void_img, resolution)
+    results['mil_x_mm_air'] = mil_x
+    results['mil_y_mm_air'] = mil_y
+    results['mil_z_mm_air'] = mil_z
+    results['mil_mean_mm_air'] = round(np.mean([mil_x, mil_y, mil_z]), 3)
+
 
     # Pore classification
     group1_pct, group2_pct, group3_pct = classify_pores(binary_img)
@@ -115,18 +123,20 @@ def extract_transport_params(binary_img, resolution):
         dict: Dictionary of transport parameters
     """
     results = {}
-
+    void_img = ~binary_img
     # Spherical ice cluster thickness
     try:
         cluster_thickness = spherical_ice_cluster(binary_img)
-        results['spherical_ice_cluster_pix'] = round(cluster_thickness, 3)
+        results['spherical_ice_cluster_pix_ice'] = round(cluster_thickness, 3)
+        cluster_thickness = spherical_ice_cluster(void_img)
+        results['spherical_ice_cluster_pix_air'] = round(cluster_thickness, 3)
     except Exception as e:
         print(f"  Warning: spherical_ice_cluster failed: {e}")
         results['spherical_ice_cluster_pix'] = None
 
-    # Skeleton metrics (pore network)
+    # Skeleton metrics (pore network) in ice phase
     try:
-        skel = skeleton_metrics(binary_img, resolution)
+        skel = skeleton_metrics(binary_img, resolution, phase='ice')
         for key, value in skel.items():
             if isinstance(value, (np.floating, float)):
                 results[key] = round(float(value), 24)
@@ -136,18 +146,25 @@ def extract_transport_params(binary_img, resolution):
                 results[key] = value
     except Exception as e:
         print(f"  Warning: skeleton_metrics failed: {e}")
-        for key in ['num_pores', 'num_throats', 'coordination_number',
-                     'avg_pore_volume', 'avg_pore_diameter', 'avg_throat_diameter',
-                     'avg_throat_length', 'max_connections', 'median_connections',
-                     'num_cluster', 'max_cluster_size', 'avg_cluster_size',
-                     'avg_pore_surface_area', 'avg_throat_area',
-                     'std_coordination_number']:
-            results[key] = None
+
+    # Skeleton metrics (pore network) in air phase
+    try:
+        skel = skeleton_metrics(void_img, resolution, phase='air')
+        for key, value in skel.items():
+            if isinstance(value, (np.floating, float)):
+                results[key] = round(float(value), 24)
+            elif isinstance(value, (np.integer, int)):
+                results[key] = int(value)
+            else:
+                results[key] = value
+    except Exception as e:
+        print(f"  Warning: skeleton_metrics failed: {e}")
+
 
     # Invert the binary image for permeability and tortuosity calculations.
     # Original: solid=True, void=False
     # Inverted: void=True, solid=False (needed for transport in void space)
-    void_img = ~binary_img
+    
 
     # Permeability and tortuosity for all three directions
     directions = [

@@ -72,10 +72,10 @@ def spherical_ice_cluster(img):
 
 
 
-def skeleton_metrics(img, resolution):
+def skeleton_metrics(img, resolution, phase):
     '''Properties of the skeleton created by Porespy'''
     results = {}
-
+    phase = phase + '_PNM_'
     snow = ps.networks.snow2(img, voxel_size= resolution)
     pn = op.io.network_from_porespy(snow.network)
     pn.add_model(propname='pore.cluster_number',
@@ -83,26 +83,26 @@ def skeleton_metrics(img, resolution):
     pn.add_model(propname='pore.cluster_size',
                  model=op.models.network.cluster_size)
 
-    results['num_pores'] = snow.network['pore.all'].shape[0]
-    results['num_throats'] = snow.network['throat.all'].shape[0]
-    results['coordination_number'] = round( (2 * results['num_throats']) / (results['num_pores']) , 2)
-    results['avg_pore_volume']= snow.network['pore.region_volume'].mean()
-    results['avg_pore_diameter'] = snow.network['pore.equivalent_diameter'].mean()
-    results['avg_throat_diameter'] = snow.network['throat.inscribed_diameter'].mean()
-    results['avg_throat_length'] = snow.network['throat.total_length'].mean()
+    results[phase + 'num_pores'] = snow.network['pore.all'].shape[0]
+    results[phase + 'num_throats'] = snow.network['throat.all'].shape[0]
+    results[phase + 'coordination_number'] = round( (2 * results[phase + 'num_throats']) / (results[phase + 'num_pores']) , 2)
+    results[phase + 'avg_pore_volume']= snow.network['pore.region_volume'].mean()
+    results[phase + 'avg_pore_diameter'] = snow.network['pore.equivalent_diameter'].mean()
+    results[phase + 'avg_throat_diameter'] = snow.network['throat.inscribed_diameter'].mean()
+    results[phase + 'avg_throat_length'] = snow.network['throat.total_length'].mean()
 
     connection_counts = list(Counter(snow.network['throat.conns'].flatten()).values())
-    results['max_connections'] = max(connection_counts)
-    results['median_connections'] = np.median(connection_counts)
+    results[phase + 'max_connections'] = max(connection_counts)
+    results[phase + 'median_connections'] = np.median(connection_counts)
 
 
-    results['num_cluster'] = len(np.unique(pn['pore.cluster_number']))
-    results['max_cluster_size'] = pn['pore.cluster_size'].max()
-    results['avg_cluster_size'] = round(np.unique(pn['pore.cluster_size']).mean())
+    results[phase + 'num_cluster'] = len(np.unique(pn['pore.cluster_number']))
+    results[phase + 'max_cluster_size'] = pn['pore.cluster_size'].max()
+    results[phase + 'avg_cluster_size'] = round(np.unique(pn['pore.cluster_size']).mean())
     
-    results['avg_pore_surface_area'] = snow.network['pore.surface_area'].mean()
-    results['avg_throat_area'] = snow.network['throat.cross_sectional_area'].mean()
-    results['std_coordination_number'] = round(np.std(connection_counts),2)
+    results[phase + 'avg_pore_surface_area'] = snow.network['pore.surface_area'].mean()
+    results[phase + 'avg_throat_area'] = snow.network['throat.cross_sectional_area'].mean()
+    results[phase + 'std_coordination_number'] = round(np.std(connection_counts),2)
 
     return results
 
