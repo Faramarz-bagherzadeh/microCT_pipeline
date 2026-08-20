@@ -62,7 +62,7 @@ if __name__ == "__main__":
     print("Weights file:", weights_file)
     print("Output directory:", output_dir)
     print("TIFF directory:", tiff_dir)
-    pixel_length=0.0120 #cm 
+     
     density = 0.917 #g/cm3
     print ('pixel_length = ', pixel_length, 'cm')
     print ('density = ', density, 'g/cm3')
@@ -80,6 +80,8 @@ if __name__ == "__main__":
 
         data = tifffile.imread(f)
         name = f.split('/')[-1].split('.')[0]
+        pixel_length= float(name.split('_')[-1])/10000 #0.0120 #cm
+        print ('resolution (pixel_length) = ', pixel_length, 'cm')
         print ('*********************************************')
         print ('processing file: ', name)
         print ('shape = ',data.shape)
