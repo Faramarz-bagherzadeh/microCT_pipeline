@@ -64,7 +64,6 @@ if __name__ == "__main__":
     print("TIFF directory:", tiff_dir)
      
     density = 0.917 #g/cm3
-    print ('pixel_length = ', pixel_length, 'cm')
     print ('density = ', density, 'g/cm3')
 
     df = pd.DataFrame(columns=['file_name', 'depth', 'estimated_weight', 'actual_weight'])
