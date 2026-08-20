@@ -227,6 +227,7 @@ def process_single_file(filepath, resolution, pixel_density, output_dir):
         'filename': filename,
         'depth' : filename.split('_')[-2],
         'filepath': filepath,
+        'resolution_microns': filename.split('_')[-3],
         'image_shape': list(binary_img.shape),
         'total_voxels': int(binary_img.size),
         'solid_voxels': int(np.sum(binary_img)),

@@ -33,7 +33,7 @@ def contrast_stretching(input_image):
     import skimage
     #Contrast stretching
     #Dropping extreems (artifacts)
-    p2, p98 = np.percentile(input_image, (1, 99))
+    p2, p98 = np.percentile(input_image, (2, 98))
     stretched_image = skimage.exposure.rescale_intensity(input_image, in_range=(p2, p98))
     return stretched_image.astype('uint8')
 
@@ -64,7 +64,7 @@ def binary_seg_kMeans(img):
     constant = 0
 
     binary = np.zeros_like(img)
-    mask = get_ice_part(img, skip=200,thresh1=15,kernel_size=100)
+    mask = get_ice_part(img, skip=10,thresh1=40,kernel_size=100)
     pixels = img[mask==1].reshape(-1, 1)
 
     if len(pixels) < 1e3:
@@ -97,6 +97,7 @@ def Otsu(img):
 def segmentation_function(image, batch):
     import numpy as np
     segmented_img = np.zeros_like(image)
+    image = contrast_stretching(image)
     for s in range (0,image.shape[0],batch):
         print ('steps = ',s,s+batch)
         if s+batch > image.shape[0]:
@@ -104,7 +105,6 @@ def segmentation_function(image, batch):
         else:
             img = image[s:s+batch,:,:]
 
-        img = contrast_stretching(img)
         binary = binary_seg_kMeans(img)
         #binary = GMM_seg(img)
         #binary = Otsu(img)
@@ -199,7 +199,7 @@ if __name__ == "__main__":
     print("Output directory:", output_dir)
 
 
-    batch = 5000
+    batch = 2000
     print ('batch size = ', batch)
 
     t1 = time.time()
