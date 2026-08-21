@@ -62,9 +62,9 @@ def binary_seg_kMeans(img):
     from sklearn.cluster import KMeans
     print ('K-Mean started !')
     constant = 0
-
+    thresh = 1 # the serounding is already removed during denoising, so the threshold can be set to 1
     binary = np.zeros_like(img)
-    mask = get_ice_part(img, skip=10,thresh1=40,kernel_size=100)
+    mask = get_ice_part(img, skip=200,thresh1=thresh,kernel_size=100)
     pixels = img[mask==1].reshape(-1, 1)
 
     if len(pixels) < 1e3:
@@ -199,7 +199,7 @@ if __name__ == "__main__":
     print("Output directory:", output_dir)
 
 
-    batch = 2000
+    batch = 5000
     print ('batch size = ', batch)
 
     t1 = time.time()
