@@ -2,6 +2,8 @@
 
 def get_ice_part(image,skip,thresh1, kernel_size):
     final_mask = np.zeros_like(image)
+    erod_kernel = np.ones((kernel_size,kernel_size),np.uint8) 
+    dilut_kernel = np.ones((kernel_size//3,kernel_size//3),np.uint8)
     for i in range(0,image.shape[0]-skip,skip):
         img = image[i]
         if img.sum()<5e3: # passing to next image if it is mostly black
@@ -9,18 +11,19 @@ def get_ice_part(image,skip,thresh1, kernel_size):
 
         # Apply a binary threshold to create a binary image
         _, binary = cv2.threshold(img, thresh1, 1, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-        contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        diluted_mask = cv2.dilate(binary,dilut_kernel,iterations = 1)
+        contours, _ = cv2.findContours(diluted_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         contours = sorted(contours, key=lambda x: cv2.contourArea(x), reverse=True)
 
         mask = np.zeros_like(binary) # contains ice
 
         for cnt in contours[:]:
             area = cv2.contourArea(cnt)
-            if area > 100:  # Adjust this threshold based on the size of the ice pieces
+            if area > 50:  # Adjust this threshold based on the size of the ice pieces
                 cv2.drawContours(mask, [cnt], -1, 1, thickness=-1)
 
-        kernel = np.ones((kernel_size,kernel_size),np.uint8)
-        erosion_mask = cv2.erode(mask,kernel,iterations = 1)
+        
+        erosion_mask = cv2.erode(mask,erod_kernel,iterations = 1)
         if erosion_mask.sum()<1e3:
             continue
         final_mask[i] = erosion_mask
@@ -61,10 +64,12 @@ def GMM_seg(img):
 def binary_seg_kMeans(img):
     from sklearn.cluster import KMeans
     print ('K-Mean started !')
-    constant = 0
+    constant = 0 # not used for now 
     thresh = 1 # the serounding is already removed during denoising, so the threshold can be set to 1
+    kernel_size = 100 # dilation kernel size for ice detection (to get center of ice core for k-means)
+    skip = 100 # how many slices to skip for ice detection (to speed up k-means process)
     binary = np.zeros_like(img)
-    mask = get_ice_part(img, skip=200,thresh1=thresh,kernel_size=100)
+    mask = get_ice_part(img, skip=skip,thresh1=thresh,kernel_size=kernel_size)
     pixels = img[mask==1].reshape(-1, 1)
 
     if len(pixels) < 1e3: #alternative method if ice boundary is not detected 
