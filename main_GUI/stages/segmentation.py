@@ -3,7 +3,6 @@ import re
 import time
 import subprocess
 import streamlit as st
-import json
 from pathlib import Path
 
 STAGE_NAME = "2-Segmentation"
@@ -21,17 +20,6 @@ def get_dirs(path):
         return [p for p in base.rglob("*") if p.is_dir() and not is_hidden_dir(p)]
     except Exception:
         return []
-
-
-def _write_slurm_for(template_path, target_path, input_value, output_value):
-    with open(template_path, "r", encoding="utf-8") as f:
-        text = f.read()
-
-    text = re.sub(r'INPUT_DIR\s*=.*', f'INPUT_DIR="{input_value}"', text)
-    text = re.sub(r'OUTPUT_DIR\s*=.*', f'OUTPUT_DIR="{output_value}"', text)
-
-    with open(target_path, "w", encoding="utf-8") as f:
-        f.write(text)
 
 
 def _get_slurm_job_state(jobid):
@@ -132,23 +120,8 @@ def render(config):
 
         for file_name in sorted(raw_files):
             sel_key = f"seg_selected_{file_name}"
-            done_key = f"seg_done_{file_name}"
-            run_key = f"seg_running_{file_name}"
-            failed_key = f"seg_failed_{file_name}"
             if sel_key not in st.session_state:
                 st.session_state[sel_key] = False
-            if done_key not in st.session_state:
-                st.session_state[done_key] = False
-            if run_key not in st.session_state:
-                st.session_state[run_key] = False
-            if failed_key not in st.session_state:
-                st.session_state[failed_key] = False
-
-        pending_deselect = st.session_state.get("seg_deselect_pending", [])
-        if pending_deselect:
-            for sel_key in pending_deselect:
-                st.session_state[sel_key] = False
-            st.session_state["seg_deselect_pending"] = []
 
         def update_select_all():
             select_all_state = st.session_state.get("seg_select_all", False)
@@ -161,30 +134,9 @@ def render(config):
 
         st.checkbox("Select All", key=select_all_key, on_change=update_select_all)
 
-        header_status, header_file = st.columns([1, 5])
-        header_status.markdown("**Status**")
-        header_file.markdown("**File**")
-
         for file_name in sorted(raw_files):
             sel_key = f"seg_selected_{file_name}"
-            done_key = f"seg_done_{file_name}"
-            run_key = f"seg_running_{file_name}"
-            failed_key = f"seg_failed_{file_name}"
-
-            if st.session_state.get(failed_key, False):
-                status = "Job Failed"
-            elif st.session_state.get(done_key, False):
-                status = "Completed"
-            elif st.session_state.get(run_key, False):
-                status = "Running"
-            elif st.session_state.get(sel_key, False):
-                status = "(Pending)"
-            else:
-                status = ""
-
-            status_col, file_col = st.columns([1, 5])
-            status_col.write(status)
-            file_col.checkbox(file_name, key=sel_key)
+            st.checkbox(file_name, key=sel_key)
 
     slurm_template = os.path.abspath(os.path.join(os.path.dirname(__file__), "slurm_segmentation.slurm"))
     if not os.path.exists(slurm_template):
@@ -195,12 +147,6 @@ def render(config):
         st.session_state.segmentation_running = False
     if "seg_stop" not in st.session_state:
         st.session_state.seg_stop = False
-    if "seg_queue" not in st.session_state:
-        st.session_state.seg_queue = []
-    if "seg_queue_index" not in st.session_state:
-        st.session_state.seg_queue_index = 0
-    if "seg_phase" not in st.session_state:
-        st.session_state.seg_phase = ""
 
     col_submit, col_stop = st.columns(2)
     submit_pressed = col_submit.button("Submit jobs", use_container_width=True)
@@ -216,80 +162,43 @@ def render(config):
         else:
             st.session_state.segmentation_running = True
             st.session_state.seg_stop = False
-            st.session_state.seg_queue = to_run
-            st.session_state.seg_queue_index = 0
-            st.session_state.seg_phase = "start_job"
-            st.session_state["seg_deselect_pending"] = []
-            for fname in to_run:
-                st.session_state[f"seg_failed_{fname}"] = False
-            st.rerun()
 
-    if st.session_state.segmentation_running and st.session_state.seg_queue:
-        queue = st.session_state.seg_queue
-        idx = st.session_state.seg_queue_index
-        if idx < len(queue):
-            fname = queue[idx]
-            if st.session_state.seg_phase == "start_job":
-                st.session_state[f"seg_running_{fname}"] = True
-                st.session_state.seg_phase = "run_job"
-                st.rerun()
-            elif st.session_state.seg_phase == "run_job":
-                if st.session_state.seg_stop:
-                    st.info("Stopping further submissions.")
-                    st.session_state.segmentation_running = False
-                    st.session_state.seg_phase = ""
-                    st.session_state.seg_queue = []
-                    st.session_state.seg_queue_index = 0
-                else:
-                    input_val = os.path.join(raw_directory_path, fname)
-                    output_val = segmentation_output_dir
+            # Full paths of selected files
+            files = [os.path.join(raw_directory_path, f) for f in sorted(to_run)]
 
-                    tmp_slurm = slurm_template + f".tmp.{idx}.slurm"
-                    try:
-                        _write_slurm_for(slurm_template, tmp_slurm, input_val, output_val)
-                    except Exception as e:
-                        st.error(f"Failed to prepare slurm file for {fname}: {e}")
-                        st.session_state[f"seg_running_{fname}"] = False
-                        st.session_state[f"seg_failed_{fname}"] = True
-                        st.session_state.segmentation_running = False
-                        st.session_state.seg_phase = ""
-                        st.session_state.seg_queue = []
-                        st.session_state.seg_queue_index = 0
-                        st.rerun()
+            try:
+                with open(slurm_template, "r", encoding="utf-8") as f:
+                    text = f.read()
+            except Exception as e:
+                st.error(f"Failed to read slurm template: {e}")
+                st.session_state.segmentation_running = False
+                return
 
-                    st.info(f"Submitting {fname}...")
-                    jobid, job_state = _submit_and_wait(tmp_slurm)
-                    st.session_state[f"seg_running_{fname}"] = False
+            # Build FILES array with quoted paths
+            file_entries = " ".join(f'"{path}"' for path in files)
+            text = re.sub(r'FILES=\s*\(.*\)', f'FILES=( {file_entries} )', text)
+            text = re.sub(r'OUTPUT_DIR\s*=.*', f'OUTPUT_DIR="{segmentation_output_dir}"', text)
+            text = re.sub(r'%MAX_JOBS%', str(len(files) - 1), text)
 
-                    if jobid is None:
-                        st.error(f"Submission failed for {fname}.")
-                        st.session_state[f"seg_failed_{fname}"] = True
-                    else:
-                        if job_state == "COMPLETED":
-                            st.success(f"Job {jobid} finished for {fname}.")
-                            st.session_state[f"seg_done_{fname}"] = True
-                            pending_deselect = st.session_state.get("seg_deselect_pending", [])
-                            pending_deselect.append(f"seg_selected_{fname}")
-                            st.session_state["seg_deselect_pending"] = pending_deselect
-                        elif job_state == "STOPPED":
-                            st.warning(f"Job {jobid} stopped for {fname}.")
-                        else:
-                            st.error(f"Job {jobid} failed for {fname}. State: {job_state}")
-                            st.session_state[f"seg_failed_{fname}"] = True
+            tmp_slurm = slurm_template + ".array.tmp.slurm"
+            try:
+                with open(tmp_slurm, "w", encoding="utf-8") as f:
+                    f.write(text)
+            except Exception as e:
+                st.error(f"Failed to write slurm file: {e}")
+                st.session_state.segmentation_running = False
+                return
 
-                    st.session_state.seg_queue_index += 1
-                    if st.session_state.seg_queue_index < len(queue):
-                        st.session_state.seg_phase = "start_job"
-                        st.rerun()
-                    else:
-                        st.session_state.segmentation_running = False
-                        st.session_state.seg_phase = ""
-                        st.session_state.seg_queue = []
-                        st.session_state.seg_queue_index = 0
-                        if st.session_state.get("seg_deselect_pending"):
-                            st.rerun()
-        else:
+            st.info(f"Submitting segmentation job array for {len(files)} files (max 50 concurrent)...")
+            jobid, job_state = _submit_and_wait(tmp_slurm)
             st.session_state.segmentation_running = False
-            st.session_state.seg_phase = ""
-            st.session_state.seg_queue = []
-            st.session_state.seg_queue_index = 0
+
+            if jobid is None:
+                st.error("Submission failed.")
+            else:
+                if job_state == "COMPLETED":
+                    st.success(f"Job array {jobid} completed successfully.")
+                elif job_state == "STOPPED":
+                    st.warning(f"Job array {jobid} was stopped.")
+                else:
+                    st.error(f"Job array {jobid} finished with state: {job_state}")
