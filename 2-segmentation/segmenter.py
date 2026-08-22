@@ -67,8 +67,12 @@ def binary_seg_kMeans(img):
     mask = get_ice_part(img, skip=200,thresh1=thresh,kernel_size=100)
     pixels = img[mask==1].reshape(-1, 1)
 
-    if len(pixels) < 1e3:
-        return binary
+    if len(pixels) < 1e3: #alternative method if ice boundary is not detected 
+        mask = np.zeros_like(img)
+        z , y , x = mask.shape[0]//2 , mask.shape[1]//2 , mask.shape[2]//2
+        mask[z-500:z+500,y-100:y+100,x-100:x+100] = 1
+        pixels = img[mask==1].reshape(-1, 1)
+        
 
     kmeans = KMeans(n_init=4, n_clusters=2,)
     kmeans.fit(pixels)
