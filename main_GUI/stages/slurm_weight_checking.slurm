@@ -26,4 +26,5 @@ export LD_LIBRARY_PATH=$CONDA_PREFIX/lib:$LD_LIBRARY_PATH
 python -u "$PROJECT_DIR/3-weight_checking/estimate_weight.py" \
     --tiff_dir "$TIFF_DIR" \
     --weights_file "$WEIGHTS_FILE" \
-    --output_dir "$OUTPUT_DIR"
+    --output_dir "$OUTPUT_DIR" \
+    --num_workers 10
