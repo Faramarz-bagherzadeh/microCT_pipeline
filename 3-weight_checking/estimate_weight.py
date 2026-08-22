@@ -1,29 +1,3 @@
-def get_ice_volume(image,thresh1,pixel_length):
-    import cv2
-    import numpy as np
-    final_mask = np.zeros_like(image)
-    for i in range(image.shape[0]):
-        img = image[i]
-        if img.sum()<100: # passing to next image if it is mostly black
-            continue
-        # Apply a binary threshold to create a binary image
-        _, binary = cv2.threshold(img, thresh1, 1, cv2.THRESH_BINARY )
-        contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        contours = sorted(contours, key=lambda x: cv2.contourArea(x), reverse=True)
-        mask = np.zeros_like(binary) # contains ice
-
-        for cnt in contours[:]:
-            area = cv2.contourArea(cnt)
-            if area > 100:  # Adjust this threshold based on the size of the ice pieces
-                cv2.drawContours(mask, [cnt], -1, 1, thickness=-1)
-
-        final_mask[i] = mask
-
-    print ('final_mask.sum()',final_mask.sum())
-    ice_volume = final_mask.sum()*(pixel_length**3)
-
-    return ice_volume
-
 
 def weight_estimation(img, pixel_length, density):
 
