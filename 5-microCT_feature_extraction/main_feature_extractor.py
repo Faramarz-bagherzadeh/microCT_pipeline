@@ -225,9 +225,9 @@ def process_single_file(filepath, resolution, pixel_density, output_dir):
     # Initialize results dictionary with metadata
     results = {
         'filename': filename,
-        'depth' : filename.split('_')[-2],
+        'depth' : filename.split('_')[-3],
         'filepath': filepath,
-        'resolution_microns': filename.split('_')[-3],
+        'resolution_microns': filename.split('_')[-2],
         'image_shape': list(binary_img.shape),
         'total_voxels': int(binary_img.size),
         'solid_voxels': int(np.sum(binary_img)),

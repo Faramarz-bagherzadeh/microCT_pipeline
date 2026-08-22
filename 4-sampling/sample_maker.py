@@ -58,7 +58,7 @@ def set_sample_volume(data, ice_mask):
     return sample
     
 
-def sample_maker(data, depth, step, sample_size, output_dir, name):
+def sample_maker(data, depth, step, sample_size, output_dir, name, pixel_length_micron):
     sample_size = int(sample_size)
     step = int(step)
     d_step = 1/data.shape[0] # assuming sample are one meter each
@@ -74,7 +74,7 @@ def sample_maker(data, depth, step, sample_size, output_dir, name):
         sample = data[starting_layer:ending_layer] # grabing the sample along the depth dimension
         ice_mask = get_ice_part(sample, depth)  # getting the ice mask for the sample
         sample_volume = set_sample_volume(sample,ice_mask)  # setting the sample volume (croping x and y) based on the ice mask
-        tifffile.imwrite(output_dir+'/'+name+ '_' + str(depth + round(d_step*i,3)) + '_'+ '.tif', sample_volume.astype('uint8'))
+        tifffile.imwrite(output_dir+'/'+name+ '_' + str(depth + round(d_step*i,3)) + '_'+ str(pixel_length_micron) + '_'+'.tif', sample_volume.astype('uint8'))
     
     return None
 
@@ -120,13 +120,15 @@ if __name__ == "__main__":
     for f in paths:
         data = tifffile.imread(f)
         name = f.split('/')[-1].split('.')[0]
+        pixel_length_micron = float(name.split('_')[-1]) #microns
+        name = name[:-4] #droping the resolution part of the name
         print ('*********************************************')
         print ('processing file: ', name)
         print ('shape = ',data.shape)
         try :
             depth = original_weight_df[original_weight_df['file_name'] == name]['depth'].values[0]
             depth = depth - 1 # to make it count from beginning of a bag
-            sample_maker(data, depth, step, sample_size, output_dir, name)
+            sample_maker(data, depth, step, sample_size, output_dir, name, pixel_length_micron)
 
         except Exception as e:
             print(f"Error processing on :{name}: {e}")
