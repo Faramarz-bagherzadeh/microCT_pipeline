@@ -92,7 +92,8 @@ if __name__ == "__main__":
 
     parser.add_argument("--weights_file", type=str, required=True)
     parser.add_argument("--output_dir", type=str, required=True)
-    parser.add_argument("--tiff_dir", type=str, required=True)
+    parser.add_argument("--tiff_dir", type=str, default=None)
+    parser.add_argument("--tiff_file", type=str, default=None)
     parser.add_argument("--sample_size", type=str, required=True)
     parser.add_argument("--overlap_size", type=str, required=True)
 
@@ -101,6 +102,7 @@ if __name__ == "__main__":
     weights_file = args.weights_file
     output_dir = args.output_dir
     tiff_dir = args.tiff_dir
+    tiff_file = args.tiff_file
     sample_size = args.sample_size
     overlap_size = args.overlap_size
     step = int(sample_size) - int(overlap_size)
@@ -108,14 +110,21 @@ if __name__ == "__main__":
     print("Weights file:", weights_file)
     print("Output directory:", output_dir)
     print("TIFF directory:", tiff_dir)
+    print("TIFF file:", tiff_file)
     print("Sample size:", sample_size)
     print("Step size:", step)
     print("Overlap size:", overlap_size)
 
-
-    paths = glob.glob(tiff_dir + '/*.tif')
-    print ('number of files =' ,len(paths))
     original_weight_df = pd.read_excel(weights_file)
+
+    if tiff_file:
+        # Single-file mode (used by SLURM array jobs)
+        paths = [tiff_file]
+    else:
+        # Directory mode (process all .tif files in the directory)
+        paths = glob.glob(tiff_dir + '/*.tif')
+
+    print ('number of files =' ,len(paths))
 
     for f in paths:
         data = tifffile.imread(f)

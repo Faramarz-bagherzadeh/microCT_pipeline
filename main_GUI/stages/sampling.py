@@ -61,6 +61,16 @@ def get_excel_files(directory):
     return sorted(files)
 
 
+def get_tif_files(directory):
+    """Return a sorted list of .tif files in the given directory."""
+    files = []
+    if directory and os.path.isdir(directory):
+        for entry in os.scandir(directory):
+            if entry.is_file() and entry.name.lower().endswith(".tif"):
+                files.append(entry.name)
+    return sorted(files)
+
+
 FINISHED_STATES = {"COMPLETED", "FAILED", "TIMEOUT", "CANCELLED", "NODE_FAIL", "PREEMPTED", "OUT_OF_MEMORY"}
 
 
@@ -153,6 +163,17 @@ def render(config):
     tiff_directory_path = str(selected_tiff_dir)
     output_directory_path = str(selected_output)
 
+    # Scan for .tif files in the selected TIFF directory
+    tif_files = get_tif_files(tiff_directory_path)
+    if not tif_files:
+        st.warning(f"No .tif files found in {tiff_directory_path}")
+        return
+
+    st.info(f"Found {len(tif_files)} .tif file(s) in {tiff_directory_path}")
+    with st.expander("Show .tif files to be processed"):
+        for tif_name in tif_files:
+            st.text(tif_name)
+
     st.markdown("### Sampling Parameters")
     sample_size = st.number_input("Sample size (number of layers)", min_value=1, value=400, step=1, key="sample_size_input")
     overlap_size = st.number_input("Overlap size (number of layers)", min_value=0, value=200, step=1, key="overlap_size_input")
@@ -167,8 +188,29 @@ def render(config):
     run_pressed = col_run.button("Run Sampling", width='stretch')
     stop_pressed = col_stop.button("Stop", width='stretch')
 
+    if stop_pressed:
+        jobid = st.session_state.get("sampling_job_id")
+        if not jobid:
+            st.warning("No sampling job has been submitted yet.")
+        else:
+            try:
+                completed = subprocess.run(["scancel", str(jobid)], capture_output=True, text=True)
+            except Exception as e:
+                st.error(f"Failed to run scancel: {e}")
+            else:
+                out = completed.stdout + completed.stderr
+                if completed.returncode == 0:
+                    st.success(f"Cancelled job {jobid}")
+                    st.session_state.pop("sampling_job_id", None)
+                    st.session_state.pop("sampling_submit_time", None)
+                    st.session_state.pop("sampling_output_dir", None)
+                    st.session_state.pop("sampling_job_completed_time", None)
+                    st.session_state.pop("sampling_job_finished", None)
+                else:
+                    st.error(f"Failed to cancel job {jobid}:\n{out}")
+
     if run_pressed:
-        # Write the slurm script with TIFF_DIR, WEIGHTS_FILE, OUTPUT_DIR, SAMPLE_SIZE and OVERLAP_SIZE set
+        # Build the SLURM script with FILES array and parameters
         try:
             with open(slurm_template, "r", encoding="utf-8") as f:
                 text = f.read()
@@ -176,13 +218,19 @@ def render(config):
             st.error(f"Failed to read slurm template: {e}")
             return
 
-        text = re.sub(r'TIFF_DIR\s*=.*', f'TIFF_DIR="{tiff_directory_path}"', text)
+        # Full paths of selected .tif files
+        files = [os.path.join(tiff_directory_path, f) for f in tif_files]
+
+        # Build FILES array with quoted paths
+        file_entries = " ".join(f'"{path}"' for path in files)
+        text = re.sub(r'FILES=\s*\(.*\)', f'FILES=( {file_entries} )', text)
         text = re.sub(r'WEIGHTS_FILE\s*=.*', f'WEIGHTS_FILE="{weights_file_full_path}"', text)
         text = re.sub(r'OUTPUT_DIR\s*=.*', f'OUTPUT_DIR="{output_directory_path}"', text)
         text = re.sub(r'SAMPLE_SIZE\s*=.*', f'SAMPLE_SIZE="{sample_size}"', text)
         text = re.sub(r'OVERLAP_SIZE\s*=.*', f'OVERLAP_SIZE="{overlap_size}"', text)
+        text = re.sub(r'%MAX_JOBS%', str(len(files) - 1), text)
 
-        temp_slurm = slurm_template + ".tmp.slurm"
+        temp_slurm = slurm_template + ".array.tmp.slurm"
         try:
             with open(temp_slurm, "w", encoding="utf-8") as f:
                 f.write(text)
@@ -190,7 +238,7 @@ def render(config):
             st.error(f"Failed to write temporary slurm file: {e}")
             return
 
-        # Submit the job
+        # Submit the array job
         try:
             completed = subprocess.run(["sbatch", temp_slurm], capture_output=True, text=True)
         except Exception as e:
@@ -201,7 +249,7 @@ def render(config):
         m = re.search(r"Submitted batch job (\d+)", out)
         if m:
             jobid = m.group(1)
-            st.success(f"Sampling job submitted (Job ID: {jobid})")
+            st.success(f"Sampling job array submitted (Job ID: {jobid}) for {len(files)} files (max 50 concurrent)")
             st.session_state["sampling_job_id"] = jobid
             st.session_state["sampling_submit_time"] = time.time()
             st.session_state["sampling_output_dir"] = output_directory_path
