@@ -116,20 +116,23 @@ def predict(model,data,patch_size, batch_size=128):
         idx = non_zero_indices[start:end]
 
         input_ = data[idx].astype(np.float32)
-
-        # Upsample each patch by 2×
-        input_ = np.stack([zoom(p, (2, 2, 2), order=1)for p in input_]) 
-        
-        input_ = torch.from_numpy(input_).unsqueeze(1).float() / 255
+        input_ = torch.from_numpy(input_).unsqueeze(1).float()
         input_ = input_.to(device)
+        # Upsample each patch by 2×
+        #input_ = np.stack([zoom(p, (2, 2, 2), order=1)for p in input_]) old way takes too much time
+        input_ = F.interpolate(input_, scale_factor=2, mode="trilinear", align_corners=True)
+        #normalization
+        input_ = input_ / 255
+        
 
         with torch.inference_mode(): # no track of gradients save memory and speed up
             output_ = model(input_)
 
+        # Downsample back to original size
+        output_ = F.interpolate(output_, scale_factor=0.5, mode="trilinear", align_corners=True)
         output_ = output_.cpu().detach().numpy()
         output_ = output_[:,0,:,:,:]*255 # back to real scale
-        # Downsample back
-        output_ = np.stack([zoom(p, (0.5, 0.5, 0.5), order=1)for p in output_])
+        #output_ = np.stack([zoom(p, (0.5, 0.5, 0.5), order=1)for p in output_]) old way- time consuming
 
         output_ = np.clip(output_, 0, 255).astype(np.uint8)
         prediction[idx] = output_
@@ -203,6 +206,7 @@ if __name__ == "__main__":
     import numpy as np
     import tifffile
     import torch
+    import torch.nn.functional as F
     import skimage
     from patchify import patchify, unpatchify
     import glob
